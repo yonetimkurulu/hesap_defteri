@@ -1,0 +1,10 @@
+{
+  "name": "Hesap Defteri",
+  "short_name": "Hesap Defteri",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f9f7",
+  "theme_color": "#237a50",
+  "description": "Küçük işletmeler için sade ve güvenilir hesap takibi.",
+  "icons": []
+}
