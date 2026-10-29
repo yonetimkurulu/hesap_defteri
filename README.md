@@ -25,10 +25,10 @@ npm run desktop:build
 
 Çıktılar `release/` klasörüne gelir:
 
-- `Hesap Defteri Setup 0.1.0.exe`: Windows kurulum sihirbazı
-- `Hesap Defteri 0.1.0.exe`: Kurulumsuz portable sürüm
+- `Hesap Defteri Setup 0.1.2.exe`: Windows kurulum sihirbazı
+- `Hesap Defteri 0.1.2.exe`: Kurulumsuz portable sürüm
 
-Uygulama local-first olduğu için kayıtlar kullanıcının bilgisayarındaki uygulama verisinde tutulur. Yeni sürümlerde aynı uygulama veri alanı korunur; kullanıcı verisi temizlenmeden kayıtlar silinmez.
+Uygulama local-first olduğu için kayıtlar Electron'un Windows `userData` klasöründe tutulur. `appId` sabit kaldığı için yeni setup sürümleri aynı klasörü kullanır ve güncelleme sırasında mevcut kayıtlar silinmez. Tarayıcı sürümünde kayıtlar aynı domain'in localStorage alanında tutulur.
 
 GitHub üzerinden otomatik release üretmek için bir sürüm etiketi gönderin:
 
@@ -38,6 +38,8 @@ git push origin v0.1.0
 ```
 
 GitHub Actions Windows dosyalarını üretip Release’e ekler. Sitedeki indirme düğmesi bu Release dosyasını kullanır.
+
+Çek kaydı, normal giderden ayrı tutulur. Çek türünde çek numarası ve vade/ödeme tarihi girilir; vade tarihi işlem geçmişinde gösterilir ve çek tutarı nakit gider toplamına otomatik eklenmez.
 
 ## Supabase geçiş planı
 
