@@ -39,13 +39,11 @@ jobs:
             "Accept" = "application/vnd.github+json"
             "X-GitHub-Api-Version" = "2022-11-28"
           }
-          # Duplicate veya boş v0.2.0 release'ini temizle
           try {
             $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases" -Headers $headers
             foreach ($r in $releases) {
-              # Eğer aynı tag için birden fazla release varsa veya sadece 1 asset varsa ve adı blockmap ise sil
               if ($r.id -eq 427843201) {
-                Write-Host "Deleting duplicate empty release: $($r.id)"
+                Write-Host "Deleting duplicate release: $($r.id)"
                 Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases/$($r.id)" -Method Delete -Headers $headers
               }
             }
@@ -56,7 +54,7 @@ jobs:
       - name: Build Windows packages
         run: |
           npm run build
-          npx electron-builder --win --x64
+          npx electron-builder --win --x64 --publish never
 
       - name: Publish single GitHub release
         uses: softprops/action-gh-release@v2
