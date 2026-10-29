@@ -1,3 +1,12 @@
+
+function getInitials(name: string) {
+  if (!name) return 'HD';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'HD';
+  if (parts.length === 1) return parts[0].slice(0, 2).toLocaleUpperCase('tr');
+  return (parts[0][0] + parts[1][0]).toLocaleUpperCase('tr');
+}
+
 declare global {
   interface Window {
     hesapDefteriDesktop?: {
@@ -80,17 +89,22 @@ function App() {
   const [query, setQuery] = useState('')
   const [transactionKind, setTransactionKind] = useState<TransactionKind>('expense')
   const [remoteError, setRemoteError] = useState('')
+  const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.1.4')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.1.5')
 
   useEffect(() => {
     if (!window.hesapDefteriDesktop) return
     window.hesapDefteriDesktop.getAppVersion().then((v) => { if (v) setInstalledVersion(v) }).catch(() => {})
     const unsubscribe = window.hesapDefteriDesktop.onUpdateStatus((data) => {
-      setUpdateState((prev) => ({ ...prev, ...data } as UpdateState))
+      setUpdateState((prev) => {
+        // Arka plan otomatik kontrollerindeki 404/network hatalarını ekrana basma
+        if (data.status === 'error' && prev.status !== 'checking') return prev;
+        return { ...prev, ...data } as UpdateState;
+      })
     })
     return () => unsubscribe()
   }, [])
@@ -162,6 +176,16 @@ function App() {
   }, [periodTransactions, state.transactions])
   if (isSupabaseConfigured && !authReady) return <LoadingScreen />
   if (isSupabaseConfigured && !session) return <AuthScreen />
+  
+  const updateActiveLedgerName = (newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    const next = ledgers.map((l) => (l.id === activeLedgerId ? { ...l, name: trimmed } : l));
+    setLedgers(next);
+    saveLedgers(next);
+    setRenameModalOpen(false);
+  };
+
   const completeOnboarding = (companyName: string) => {
     const trimmed = companyName.trim() || 'İşletme Defterim';
     const initialLedger: Ledger = { id: crypto.randomUUID(), name: trimmed, createdAt: today };
@@ -199,8 +223,8 @@ function App() {
 
   return <div className="app-shell"><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} /><nav>{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMobileNav(false) }}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-bottom"><UpdateWidget updateState={updateState} installedVersion={installedVersion} onCheck={checkForUpdate} onDownload={startDownload} onInstall={installAndRestart} />
 <a className="download-link" href={desktopDownloadUrl} target="_blank" rel="noreferrer"><Download size={18} />Web / Sürümler</a>
-<div className="profile"><div className="avatar">HD</div><div><strong>Yerel çalışma</strong><span>{activeLedger.name}</span></div></div>
-</div></aside>{mobileNav && <button className="backdrop" aria-label="Menüyü kapat" onClick={() => setMobileNav(false)} />}<main className="main-content"><header className="topbar"><button className="icon-button menu-button" aria-label="Menüyü aç" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="breadcrumb"><span>{activeLedger.name}</span><b>/</b><strong>{navItems.find((item) => item.id === section)?.label}</strong></div><div className="top-actions"><span className="online"><i />{remoteError ? 'Bağlantı hatası' : isSupabaseConfigured ? 'Güvenli bağlantı' : 'Yerel çalışma modu'}</span><button className="icon-button" aria-label="Yardım"><CircleHelp size={20} /></button><div className="mini-avatar">HD</div></div></header>{updateState.status !== 'idle' && updateState.status !== 'not-available' && (
+<button type="button" className="profile profile-clickable" onClick={() => setRenameModalOpen(true)} title="Şirket / Defter adını değiştir"><div className="avatar">{getInitials(activeLedger.name)}</div><div><strong>{activeLedger.name}</strong><span>Şirket adını düzenle ✏️</span></div></button>
+</div></aside>{mobileNav && <button className="backdrop" aria-label="Menüyü kapat" onClick={() => setMobileNav(false)} />}<main className="main-content"><header className="topbar"><button className="icon-button menu-button" aria-label="Menüyü aç" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="breadcrumb"><span>{activeLedger.name}</span><b>/</b><strong>{navItems.find((item) => item.id === section)?.label}</strong></div><div className="top-actions"><span className="online"><i />{remoteError ? 'Bağlantı hatası' : isSupabaseConfigured ? 'Güvenli bağlantı' : 'Yerel çalışma modu'}</span><button className="icon-button" aria-label="Yardım"><CircleHelp size={20} /></button><button type="button" className="mini-avatar-btn" onClick={() => setRenameModalOpen(true)} title="Şirket adını değiştir"><div className="mini-avatar">{getInitials(activeLedger.name)}</div></button></div></header>{updateState.status !== 'idle' && updateState.status !== 'not-available' && (
   <div className={"update-banner update-banner-" + updateState.status}>
 
     {updateState.status === 'checking' && <span><RefreshCw size={15} className="spin" /> Güncellemeler denetleniyor...</span>}
@@ -224,14 +248,22 @@ function App() {
     )}
     {updateState.status === 'error' && (
       <>
-        <span className="update-error-text">Güncelleme kontrolünde hata: {updateState.message || 'Bilinmeyen hata'}</span>
+        <span className="update-error-text">Şu anda yeni bir güncelleme bulunmuyor veya sunucuya erişilemedi.</span>
         <button type="button" className="secondary-button btn-update-sm" onClick={() => setUpdateState({ status: 'idle' })}>Kapat</button>
       </>
     )}
   </div>
 )}
 <div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} onAdd={() => setModal('contact')} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}
-{showOnboarding && <OnboardingModal onComplete={completeOnboarding} />}</div>
+{showOnboarding && <OnboardingModal onComplete={completeOnboarding} />}
+{renameModalOpen && (
+  <RenameLedgerModal
+    currentName={activeLedger.name}
+    onSave={updateActiveLedgerName}
+    onClose={() => setRenameModalOpen(false)}
+  />
+)}
+</div>
 }
 
 function LedgerSwitcher({ ledgers, activeLedgerId, setLedgers }: { ledgers: Ledger[]; activeLedgerId: string; setLedgers: (ledgers: Ledger[]) => void }) {
@@ -508,6 +540,47 @@ function OnboardingModal({ onComplete }: { onComplete: (name: string) => void })
           <button type="submit" className="primary-button onboarding-submit-btn">
             Defteri Oluştur ve Başla
           </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
+function RenameLedgerModal({ currentName, onSave, onClose }: { currentName: string; onSave: (name: string) => void; onClose: () => void }) {
+  const [val, setVal] = useState(currentName);
+  return (
+    <div className="modal-backdrop">
+      <div className="modal" style={{ maxWidth: '420px' }}>
+        <div className="modal-heading">
+          <div>
+            <h2>Şirket / Defter Adını Düzenle</h2>
+            <p>Uygulamada ve raporlarda görünecek adı güncelleyin.</p>
+          </div>
+          <button className="icon-button" aria-label="Kapat" onClick={onClose}><X size={19} /></button>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSave(val);
+          }}
+          className="form-grid"
+        >
+          <label className="wide">
+            Şirket / Defter Adı
+            <input
+              autoFocus
+              type="text"
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              placeholder="Örn. Ninehatun İnşaat"
+              required
+            />
+          </label>
+          <div className="modal-actions wide">
+            <button type="button" className="secondary-button" onClick={onClose}>Vazgeç</button>
+            <button type="submit" className="primary-button">Kaydet</button>
+          </div>
         </form>
       </div>
     </div>

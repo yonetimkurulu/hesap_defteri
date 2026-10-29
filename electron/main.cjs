@@ -32,6 +32,8 @@ function createWindow() {
 }
 
 // ── Auto-update olayları (Renderer'a bildirim) ─────────────────────
+let isManualCheck = false
+
 function sendUpdateStatus(data) {
   if (mainWindow && mainWindow.webContents) {
     mainWindow.webContents.send('update-status', data)
@@ -39,10 +41,13 @@ function sendUpdateStatus(data) {
 }
 
 autoUpdater.on('checking-for-update', () => {
-  sendUpdateStatus({ status: 'checking' })
+  if (isManualCheck) {
+    sendUpdateStatus({ status: 'checking' })
+  }
 })
 
 autoUpdater.on('update-available', (info) => {
+  isManualCheck = false
   sendUpdateStatus({
     status: 'available',
     version: info.version,
@@ -51,14 +56,21 @@ autoUpdater.on('update-available', (info) => {
 })
 
 autoUpdater.on('update-not-available', () => {
-  sendUpdateStatus({ status: 'not-available' })
+  if (isManualCheck) {
+    isManualCheck = false
+    sendUpdateStatus({ status: 'not-available' })
+  }
 })
 
 autoUpdater.on('error', (err) => {
-  sendUpdateStatus({
-    status: 'error',
-    message: err?.message || String(err),
-  })
+  if (isManualCheck) {
+    isManualCheck = false
+    sendUpdateStatus({
+      status: 'error',
+      message: err?.message || String(err),
+    })
+  }
+  // Arka plan otomatik kontrollerindeki hataları sessizce yut
 })
 
 autoUpdater.on('download-progress', (progress) => {
@@ -86,7 +98,10 @@ autoUpdater.on('update-downloaded', (info) => {
 
 // ── Renderer'dan gelen IPC komutları ───────────────────────────────
 ipcMain.handle('check-for-updates', () => {
+  isManualCheck = true
+  sendUpdateStatus({ status: 'checking' })
   return autoUpdater.checkForUpdates().catch((err) => {
+    isManualCheck = false
     sendUpdateStatus({ status: 'error', message: err.message })
   })
 })
