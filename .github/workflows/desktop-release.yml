@@ -6,7 +6,7 @@ on:
       tag:
         description: 'Assetlerin yükleneceği release etiketi'
         required: true
-        default: 'v0.2.3'
+        default: 'v0.2.4'
   push:
     tags:
       - 'v*'

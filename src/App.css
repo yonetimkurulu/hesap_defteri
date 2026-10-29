@@ -715,3 +715,103 @@ button,input,select { font:inherit; } button { cursor:pointer; }
   color: var(--red);
   border-color: var(--red);
 }
+
+
+/* ── Logo Canlandırma & Defter Renk Düzeltmeleri ────────────────── */
+.brand-mark {
+  background: linear-gradient(135deg, #f5d477 0%, #e8b44d 100%) !important;
+  color: #0d2c1e !important;
+  box-shadow: 0 4px 14px rgba(245, 212, 119, 0.4) !important;
+}
+
+/* Defter menüsündeki yazıların koyu zeminde cam gibi okunması */
+.ledger-item-row:not(.selected) .ledger-select-btn {
+  color: #ffffff !important;
+}
+.ledger-item-row:not(.selected) .ledger-select-btn span {
+  font-weight: 600 !important;
+  color: #f8faf8 !important;
+}
+.ledger-item-row:not(.selected) .ledger-select-btn small {
+  color: #9cc1aa !important;
+}
+.ledger-item-row:not(.selected) .ledger-rename-btn {
+  color: #e5b755 !important;
+}
+.ledger-item-row:not(.selected) .ledger-rename-btn:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+}
+.ledger-item-row.selected {
+  background: #ffffff !important;
+}
+.ledger-item-row.selected .ledger-select-btn span {
+  color: #123b2b !important;
+  font-weight: 700 !important;
+}
+.ledger-item-row.selected .ledger-select-btn small {
+  color: #23784d !important;
+  font-weight: 600 !important;
+}
+.ledger-item-row.selected .ledger-rename-btn {
+  color: #123b2b !important;
+}
+
+/* ── Yardım Rehberi Modalı ─────────────────────────────────────── */
+.help-guide-modal {
+  max-width: 620px !important;
+}
+.help-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.help-badge-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--green-soft);
+  color: var(--green);
+  display: grid;
+  place-items: center;
+}
+.help-guide-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 18px 0 24px;
+  max-height: 58vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.help-guide-item {
+  display: flex;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.help-item-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+.help-item-body strong {
+  display: block;
+  font-size: 13px;
+  color: var(--ink);
+  margin-bottom: 3px;
+}
+.help-item-body p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.help-icon-btn {
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.help-icon-btn:hover {
+  transform: scale(1.1);
+  color: var(--green);
+}

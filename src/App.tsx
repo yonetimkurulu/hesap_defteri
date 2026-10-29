@@ -54,7 +54,7 @@ const today = new Date().toISOString().slice(0, 10)
 const currency = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' })
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })
 const kindLabels: Record<TransactionKind, string> = { income: 'Gelir', expense: 'Gider', payable: 'Borç', receivable: 'Alacak', payment: 'Ödeme', collection: 'Tahsilat', check: 'Çek' }
-const navItems = [{ id: 'dashboard' as Section, label: 'Genel Bakış', icon: LayoutDashboard }, { id: 'transactions' as Section, label: 'İşlemler', icon: WalletCards }, { id: 'contacts' as Section, label: 'Kişiler', icon: Users }, { id: 'projects' as Section, label: 'İşler / Projeler', icon: BriefcaseBusiness }, { id: 'reports' as Section, label: 'Raporlar', icon: FileDown }]
+const navItems = [{ id: 'dashboard' as Section, label: 'Genel Bakış', icon: LayoutDashboard }, { id: 'transactions' as Section, label: 'İşlemler', icon: WalletCards }, { id: 'contacts' as Section, label: 'Kişiler', icon: Users }, { id: 'reports' as Section, label: 'Raporlar', icon: FileDown }]
 const blankState: AppState = { transactions: [], contacts: [], projects: [] }
 const defaultLedger: Ledger = { id: 'default-defter', name: 'İşletme Defterim', createdAt: today }
 const desktopDownloadUrl = 'https://github.com/yonetimkurulu/hesap_defteri/releases'
@@ -91,11 +91,12 @@ function App() {
   const [transactionKind, setTransactionKind] = useState<TransactionKind>('expense')
   const [remoteError, setRemoteError] = useState('')
   const [renameModalOpen, setRenameModalOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.2.3')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.2.4')
 
   useEffect(() => {
     if (!window.hesapDefteriDesktop) return
@@ -104,6 +105,9 @@ function App() {
       setUpdateState((prev) => {
         // Arka plan otomatik kontrollerindeki 404/network hatalarını ekrana basma
         if (data.status === 'error' && prev.status !== 'checking') return prev;
+        if (data.status === 'not-available' || data.status === 'error') {
+          setTimeout(() => setUpdateState({ status: 'idle' }), 3500);
+        }
         return { ...prev, ...data } as UpdateState;
       })
     })
@@ -290,7 +294,7 @@ function App() {
   return <div className="app-shell"><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} /><nav>{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMobileNav(false) }}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-bottom"><UpdateWidget updateState={updateState} installedVersion={installedVersion} onCheck={checkForUpdate} onDownload={startDownload} onInstall={installAndRestart} />
 <a className="download-link" href={desktopDownloadUrl} target="_blank" rel="noreferrer"><Download size={18} />Web / Sürümler</a>
 <button type="button" className="profile profile-clickable" onClick={() => setRenameModalOpen(true)} title="Şirket adını düzenle"><div className="avatar">{getInitials(companyName)}</div><div><strong>{companyName}</strong><span>Şirket Profilini Düzenle ✏️</span></div></button>
-</div></aside>{mobileNav && <button className="backdrop" aria-label="Menüyü kapat" onClick={() => setMobileNav(false)} />}<main className="main-content"><header className="topbar"><button className="icon-button menu-button" aria-label="Menüyü aç" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="breadcrumb"><span>{companyName}</span><b>/</b><span>{activeLedger.name} Defteri</span><b>/</b><strong>{navItems.find((item) => item.id === section)?.label}</strong></div><div className="top-actions"><span className="online"><i />{remoteError ? 'Bağlantı hatası' : isSupabaseConfigured ? 'Güvenli bağlantı' : 'Yerel çalışma modu'}</span><button className="icon-button" aria-label="Yardım"><CircleHelp size={20} /></button><button type="button" className="mini-avatar-btn" onClick={() => setRenameModalOpen(true)} title={`${companyName} - Şirket Adını Düzenle`}><div className="mini-avatar">{getInitials(companyName)}</div></button></div></header>{updateState.status !== 'idle' && updateState.status !== 'not-available' && (
+</div></aside>{mobileNav && <button className="backdrop" aria-label="Menüyü kapat" onClick={() => setMobileNav(false)} />}<main className="main-content"><header className="topbar"><button className="icon-button menu-button" aria-label="Menüyü aç" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="breadcrumb"><span>{companyName}</span><b>/</b><span>{activeLedger.name} Defteri</span><b>/</b><strong>{navItems.find((item) => item.id === section)?.label}</strong></div><div className="top-actions"><span className="online"><i />{remoteError ? 'Bağlantı hatası' : isSupabaseConfigured ? 'Güvenli bağlantı' : 'Yerel çalışma modu'}</span><button type="button" className="icon-button help-icon-btn" aria-label="Yardım Rehberi" title="Kullanım Rehberi" onClick={() => setHelpOpen(true)}><CircleHelp size={20} /></button><button type="button" className="mini-avatar-btn" onClick={() => setRenameModalOpen(true)} title={`${companyName} - Şirket Adını Düzenle`}><div className="mini-avatar">{getInitials(companyName)}</div></button></div></header>{updateState.status !== 'idle' && updateState.status !== 'not-available' && (
   <div className={"update-banner update-banner-" + updateState.status}>
 
     {updateState.status === 'checking' && <span><RefreshCw size={15} className="spin" /> Güncellemeler denetleniyor...</span>}
@@ -322,6 +326,7 @@ function App() {
 )}
 <div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} ledgers={ledgers} refreshKey={refreshTrigger} onAdd={() => setModal('contact')} onUpdateContact={updateContact} onDeleteContact={deleteContact} onSaveTx={saveTxToLedger} onDeleteTx={deleteTxFromLedger} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}
 {showOnboarding && <OnboardingModal onComplete={completeOnboarding} />}
+{helpOpen && <HelpGuideModal onClose={() => setHelpOpen(false)} />}
 {renameModalOpen && (
   <RenameCompanyModal
     currentName={companyName}
@@ -1157,6 +1162,74 @@ function EditTransactionFromContactModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+
+function HelpGuideModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-backdrop">
+      <div className="modal help-guide-modal">
+        <div className="modal-heading">
+          <div className="help-modal-header">
+            <div className="help-badge-icon"><CircleHelp size={24} /></div>
+            <div>
+              <h2>Hesap Defteri Kullanım Rehberi</h2>
+              <p>Uygulamayı en verimli şekilde kullanmanız için ipuçları.</p>
+            </div>
+          </div>
+          <button className="icon-button" aria-label="Kapat" onClick={onClose}><X size={19} /></button>
+        </div>
+
+        <div className="help-guide-content">
+          <div className="help-guide-item">
+            <div className="help-item-icon">🏢</div>
+            <div className="help-item-body">
+              <strong>Ana Şirket ve Defter Mantığı</strong>
+              <p>Sol altta ve sağ üstte ana şirket adınız yer alır. Üzerine tıklayarak şirket adınızı değiştirebilirsiniz. Sol menüdeki <b>"Aktif Defter"</b> kısmından şantiye, kasa veya proje defterlerinizi bağımsız olarak yönetebilir, yeni defterler açabilirsiniz.</p>
+            </div>
+          </div>
+
+          <div className="help-guide-item">
+            <div className="help-item-icon">💰</div>
+            <div className="help-item-body">
+              <strong>Finansal Kayıt ve Çek Takibi</strong>
+              <p><b>"Yeni Kayıt"</b> butonuna basarak Gelir, Gider, Ödeme veya Çek girebilirsiniz. Çek seçtiğinizde vade tarihi ve çek numarası alanları açılır. Çek tutarları nakit gider toplamına karışmaz, vadesi Dashboard'daki <b>Çek Takibi</b> panelinde gün gün izlenir.</p>
+            </div>
+          </div>
+
+          <div className="help-guide-item">
+            <div className="help-item-icon">👥</div>
+            <div className="help-item-body">
+              <strong>Kişiler ve Cari Hareketleri</strong>
+              <p><b>"Kişiler"</b> sekmesinde kayıtlı tüm usta, tedarikçi ve müşterilerinizi görebilirsiniz. Bir kişiye tıkladığınızda <b>hangi defterden kaç para verildiği tarih tarih listelenir</b>. İlgili kayıtları doğrudan ekstre üzerinden düzenleyebilir veya silebilirsiniz.</p>
+            </div>
+          </div>
+
+          <div className="help-guide-item">
+            <div className="help-item-icon">📅</div>
+            <div className="help-item-body">
+              <strong>Takvimli Tarih Seçimi</strong>
+              <p>Kayıt girerken tarih kutusunun sağındaki <b>takvim simgesine</b> basarak mini takvimden tek tıkla gün seçebilir veya doğrudan klavyeden yazabilirsiniz.</p>
+            </div>
+          </div>
+
+          <div className="help-guide-item">
+            <div className="help-item-icon">🔄</div>
+            <div className="help-item-body">
+              <strong>Tek Tıkla Otomatik Güncelleme</strong>
+              <p>Yeni bir sürüm yayınlandığında ekranın üstünde yeşil güncelleme banner'ı çıkar. <b>"Şimdi Güncelle"</b> dediğinizde arka planda sessizce indirilir ve hiçbir kaydınız silinmeden anında güncellenir.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button type="button" className="primary-button" onClick={onClose} style={{ width: '100%' }}>
+            Anladım, Kapat
+          </button>
+        </div>
       </div>
     </div>
   );
