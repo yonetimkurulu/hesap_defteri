@@ -1,7 +1,7 @@
 {
   "name": "hesap_defteri",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Küçük işletmeler için local-first hesap ve defter yönetimi.",
   "author": "Hesap Defteri",
   "type": "module",
@@ -53,12 +53,14 @@
         "nsis",
         "portable"
       ],
-      "icon": "public/favicon.svg"
+      "icon": "public/favicon.svg",
+      "artifactName": "Hesap-Defteri-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Hesap-Defteri-Setup-${version}.${ext}"
     },
     "publish": {
       "provider": "github",
