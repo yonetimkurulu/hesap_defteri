@@ -6,7 +6,7 @@ on:
       tag:
         description: 'Assetlerin yükleneceği release etiketi'
         required: true
-        default: 'v0.1.6'
+        default: 'v0.1.7'
   push:
     tags:
       - 'v*'
@@ -29,9 +29,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish Windows packages
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Windows packages
         run: |
           npm run build
-          npx electron-builder --win --x64 --publish always
+          npx electron-builder --win --x64
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release/*.exe
+            release/latest.yml

@@ -94,7 +94,7 @@ function App() {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.1.6')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.1.7')
 
   useEffect(() => {
     if (!window.hesapDefteriDesktop) return
