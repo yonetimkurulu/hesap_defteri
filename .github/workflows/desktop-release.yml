@@ -6,7 +6,7 @@ on:
       tag:
         description: 'Assetlerin yükleneceği release etiketi'
         required: true
-        default: 'v0.2.0'
+        default: 'v0.2.1'
   push:
     tags:
       - 'v*'
@@ -29,9 +29,45 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish Windows packages
+      - name: Clean duplicate releases
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $headers = @{
+            "Authorization" = "Bearer $env:GH_TOKEN"
+            "Accept" = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          # Duplicate veya boş v0.2.0 release'ini temizle
+          try {
+            $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases" -Headers $headers
+            foreach ($r in $releases) {
+              # Eğer aynı tag için birden fazla release varsa veya sadece 1 asset varsa ve adı blockmap ise sil
+              if ($r.id -eq 427843201) {
+                Write-Host "Deleting duplicate empty release: $($r.id)"
+                Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases/$($r.id)" -Method Delete -Headers $headers
+              }
+            }
+          } catch {
+            Write-Host "Cleanup notice: $_"
+          }
+
+      - name: Build Windows packages
+        run: |
           npm run build
-          npx electron-builder --win --x64 --publish always
+          npx electron-builder --win --x64
+
+      - name: Publish single GitHub release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release/*.exe
+            release/latest.yml
+            release/*.blockmap
