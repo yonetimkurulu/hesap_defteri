@@ -340,11 +340,7 @@ button,input,select { font:inherit; } button { cursor:pointer; }
   align-items: center;
   border-radius: 8px;
   overflow: hidden;
-  transition: background 0.15s;
-}
-.ledger-item-row:hover,
-.ledger-item-row.selected {
-  background: var(--green-soft);
+  transition: all 0.18s ease;
 }
 .ledger-row-content {
   width: 100%;
@@ -717,46 +713,6 @@ button,input,select { font:inherit; } button { cursor:pointer; }
 }
 
 
-/* ── Logo Canlandırma & Defter Renk Düzeltmeleri ────────────────── */
-.brand-mark {
-  background: linear-gradient(135deg, #f5d477 0%, #e8b44d 100%) !important;
-  color: #0d2c1e !important;
-  box-shadow: 0 4px 14px rgba(245, 212, 119, 0.4) !important;
-}
-
-/* Defter menüsündeki yazıların koyu zeminde cam gibi okunması */
-.ledger-item-row:not(.selected) .ledger-select-btn {
-  color: #ffffff !important;
-}
-.ledger-item-row:not(.selected) .ledger-select-btn span {
-  font-weight: 600 !important;
-  color: #f8faf8 !important;
-}
-.ledger-item-row:not(.selected) .ledger-select-btn small {
-  color: #9cc1aa !important;
-}
-.ledger-item-row:not(.selected) .ledger-rename-btn {
-  color: #e5b755 !important;
-}
-.ledger-item-row:not(.selected) .ledger-rename-btn:hover {
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: #ffffff !important;
-}
-.ledger-item-row.selected {
-  background: #ffffff !important;
-}
-.ledger-item-row.selected .ledger-select-btn span {
-  color: #123b2b !important;
-  font-weight: 700 !important;
-}
-.ledger-item-row.selected .ledger-select-btn small {
-  color: #23784d !important;
-  font-weight: 600 !important;
-}
-.ledger-item-row.selected .ledger-rename-btn {
-  color: #123b2b !important;
-}
-
 /* ── Yardım Rehberi Modalı ─────────────────────────────────────── */
 .help-guide-modal {
   max-width: 620px !important;
@@ -814,4 +770,81 @@ button,input,select { font:inherit; } button { cursor:pointer; }
 .help-icon-btn:hover {
   transform: scale(1.1);
   color: var(--green);
+}
+
+
+/* ── Logo Canlandırma & Açık Renk ──────────────────────────────── */
+.brand-mark {
+  background: #ffffff !important;
+  color: #15803d !important;
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.35), 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.9) !important;
+}
+.brand-mark svg {
+  color: #15803d !important;
+  stroke: #15803d !important;
+}
+.brand strong {
+  color: #ffffff !important;
+}
+.brand span {
+  color: #a7f3d0 !important;
+}
+
+/* ── Defter Menüsü Kusursuz Kontrast & Hover ───────────────────── */
+.ledger-item-row {
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  transition: all 0.18s ease !important;
+}
+
+/* Aktif OLMAYAN defter (Normal durum) */
+.ledger-item-row:not(.selected) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+.ledger-item-row:not(.selected) .ledger-select-btn span {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+.ledger-item-row:not(.selected) .ledger-select-btn small {
+  color: #9cc1aa !important;
+}
+.ledger-item-row:not(.selected) .ledger-rename-btn {
+  color: #f5d477 !important;
+}
+
+/* Aktif OLMAYAN defterin ÜZERİNE GELİNCE (HOVER) - Asla beyaz zemin yok! */
+.ledger-item-row:not(.selected):hover {
+  background: rgba(255, 255, 255, 0.22) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+  transform: translateX(2px);
+}
+.ledger-item-row:not(.selected):hover .ledger-select-btn span {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+.ledger-item-row:not(.selected):hover .ledger-select-btn small {
+  color: #d1fae5 !important;
+}
+.ledger-item-row:not(.selected):hover .ledger-rename-btn {
+  color: #ffffff !important;
+}
+
+/* AKTİF (Seçili) defter - Bembeyaz kart, koyu siyah/yeşil yazı */
+.ledger-item-row.selected {
+  background: #ffffff !important;
+  border-color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+.ledger-item-row.selected .ledger-select-btn span {
+  color: #123b2b !important;
+  font-weight: 700 !important;
+}
+.ledger-item-row.selected .ledger-select-btn small {
+  color: #15803d !important;
+  font-weight: 600 !important;
+}
+.ledger-item-row.selected .ledger-rename-btn {
+  color: #123b2b !important;
 }

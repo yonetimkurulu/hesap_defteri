@@ -1,7 +1,7 @@
 {
   "name": "hesap_defteri",
   "private": true,
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Küçük işletmeler için local-first hesap ve defter yönetimi.",
   "author": "Hesap Defteri",
   "type": "module",
