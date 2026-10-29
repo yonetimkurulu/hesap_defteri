@@ -26,7 +26,7 @@ const kindLabels: Record<TransactionKind, string> = { income: 'Gelir', expense: 
 const navItems = [{ id: 'dashboard' as Section, label: 'Genel Bakış', icon: LayoutDashboard }, { id: 'transactions' as Section, label: 'İşlemler', icon: WalletCards }, { id: 'contacts' as Section, label: 'Kişiler', icon: Users }, { id: 'projects' as Section, label: 'İşler / Projeler', icon: BriefcaseBusiness }, { id: 'reports' as Section, label: 'Raporlar', icon: FileDown }]
 const blankState: AppState = { transactions: [], contacts: [], projects: [] }
 const defaultLedger: Ledger = { id: 'ninehatun-insaat', name: 'Ninehatun İnşaat', createdAt: today }
-const desktopDownloadUrl = 'https://github.com/yonetimkurulu/hesap_defteri/releases/latest/download/Hesap%20Defteri%20Setup%200.1.0.exe'
+const desktopDownloadUrl = 'https://github.com/yonetimkurulu/hesap_defteri/releases'
 
 function ensureLocalStorageSchema() { if (localStorage.getItem(LOCAL_SCHEMA_KEY) !== LOCAL_SCHEMA_VERSION) localStorage.setItem(LOCAL_SCHEMA_KEY, LOCAL_SCHEMA_VERSION) }
 function readLedgers(): Ledger[] { ensureLocalStorageSchema(); try { const saved = localStorage.getItem(LEDGERS_KEY); return saved ? JSON.parse(saved) as Ledger[] : [defaultLedger] } catch { return [defaultLedger] } }
