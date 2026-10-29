@@ -18,7 +18,7 @@ type UpdateState = {
   percent?: number
   message?: string
 }
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Banknote, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, CircleHelp, Clock, Download, FileDown, LayoutDashboard, Menu, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Users, WalletCards, X } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
@@ -37,6 +37,7 @@ type Ledger = { id: string; name: string; createdAt: string }
 const STORAGE_KEY = 'hesap-defteri-local-v1'
 const LEDGERS_KEY = 'hesap-defteri-ledgers-v1'
 const ACTIVE_LEDGER_KEY = 'hesap-defteri-active-ledger-v1'
+const ONBOARDING_KEY = 'hesap-defteri-onboarded-v1'
 const LOCAL_SCHEMA_KEY = 'hesap-defteri-local-schema-version'
 const LOCAL_SCHEMA_VERSION = '1'
 const today = new Date().toISOString().slice(0, 10)
@@ -45,7 +46,7 @@ const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 
 const kindLabels: Record<TransactionKind, string> = { income: 'Gelir', expense: 'Gider', payable: 'Borç', receivable: 'Alacak', payment: 'Ödeme', collection: 'Tahsilat', check: 'Çek' }
 const navItems = [{ id: 'dashboard' as Section, label: 'Genel Bakış', icon: LayoutDashboard }, { id: 'transactions' as Section, label: 'İşlemler', icon: WalletCards }, { id: 'contacts' as Section, label: 'Kişiler', icon: Users }, { id: 'projects' as Section, label: 'İşler / Projeler', icon: BriefcaseBusiness }, { id: 'reports' as Section, label: 'Raporlar', icon: FileDown }]
 const blankState: AppState = { transactions: [], contacts: [], projects: [] }
-const defaultLedger: Ledger = { id: 'ninehatun-insaat', name: 'Ninehatun İnşaat', createdAt: today }
+const defaultLedger: Ledger = { id: 'default-defter', name: 'İşletme Defterim', createdAt: today }
 const desktopDownloadUrl = 'https://github.com/yonetimkurulu/hesap_defteri/releases'
 
 function ensureLocalStorageSchema() { if (localStorage.getItem(LOCAL_SCHEMA_KEY) !== LOCAL_SCHEMA_VERSION) localStorage.setItem(LOCAL_SCHEMA_KEY, LOCAL_SCHEMA_VERSION) }
@@ -55,7 +56,13 @@ function saveLedgers(ledgers: Ledger[]) { localStorage.setItem(LEDGERS_KEY, JSON
 function changeLedger(id: string) { localStorage.setItem(ACTIVE_LEDGER_KEY, id); window.dispatchEvent(new Event('hesap-defteri-ledger-change')) }
 function parseAmount(value: string) { const normalized = value.trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.'); return Number(normalized) }
 function formatDateForForm(value: string) { const [year, month, day] = value.split('-'); return year && month && day ? `${day}.${month}.${year}` : value }
-function parseDateInput(value: string) { const match = value.trim().match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/); if (!match) return value; return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}` }
+function parseDateInput(value: string) {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (!match) return trimmed;
+  return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+}
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -73,8 +80,11 @@ function App() {
   const [query, setQuery] = useState('')
   const [transactionKind, setTransactionKind] = useState<TransactionKind>('expense')
   const [remoteError, setRemoteError] = useState('')
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
+  })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.1.3')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.1.4')
 
   useEffect(() => {
     if (!window.hesapDefteriDesktop) return
@@ -152,6 +162,17 @@ function App() {
   }, [periodTransactions, state.transactions])
   if (isSupabaseConfigured && !authReady) return <LoadingScreen />
   if (isSupabaseConfigured && !session) return <AuthScreen />
+  const completeOnboarding = (companyName: string) => {
+    const trimmed = companyName.trim() || 'İşletme Defterim';
+    const initialLedger: Ledger = { id: crypto.randomUUID(), name: trimmed, createdAt: today };
+    setLedgers([initialLedger]);
+    saveLedgers([initialLedger]);
+    setActiveLedgerId(initialLedger.id);
+    localStorage.setItem(ACTIVE_LEDGER_KEY, initialLedger.id);
+    localStorage.setItem(ONBOARDING_KEY, 'true');
+    setShowOnboarding(false);
+  }
+
   const addRecord = (event: React.FormEvent<HTMLFormElement>, type: 'transaction' | 'contact' | 'project') => {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
@@ -209,15 +230,183 @@ function App() {
     )}
   </div>
 )}
-<div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} onAdd={() => setModal('contact')} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}</div>
+<div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} onAdd={() => setModal('contact')} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}
+{showOnboarding && <OnboardingModal onComplete={completeOnboarding} />}</div>
 }
 
-function LedgerSwitcher({ ledgers, activeLedgerId, setLedgers }: { ledgers: Ledger[]; activeLedgerId: string; setLedgers: (ledgers: Ledger[]) => void }) { const [open, setOpen] = useState(false); const [creating, setCreating] = useState(false); const [name, setName] = useState(''); const create = (event: React.FormEvent) => { event.preventDefault(); const trimmed = name.trim(); if (!trimmed) return; const ledger = { id: crypto.randomUUID(), name: trimmed, createdAt: today }; const next = [...ledgers, ledger]; setLedgers(next); saveLedgers(next); setName(''); setCreating(false); setOpen(false); changeLedger(ledger.id) }; const active = ledgers.find((ledger) => ledger.id === activeLedgerId) ?? defaultLedger; return <div className="ledger-picker"><button className="business-switcher" onClick={() => setOpen(!open)}><span>AKTİF DEFTER</span><strong>{active.name}</strong><ChevronDown size={16} /></button>{open && <div className="ledger-menu">{ledgers.map((ledger) => <button key={ledger.id} className={ledger.id === activeLedgerId ? 'selected' : ''} onClick={() => { changeLedger(ledger.id); setOpen(false) }}>{ledger.name}<small>Defteri aç</small></button>)}{creating ? <form onSubmit={create} className="new-ledger-form"><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Yeni şirket adı" /><button className="primary-button">Oluştur</button></form> : <button className="new-ledger-button" onClick={() => setCreating(true)}><Plus size={15} /> Yeni defter aç</button>}</div>}</div> }
+function LedgerSwitcher({ ledgers, activeLedgerId, setLedgers }: { ledgers: Ledger[]; activeLedgerId: string; setLedgers: (ledgers: Ledger[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [editName, setEditName] = useState('');
+
+  const active = ledgers.find((ledger) => ledger.id === activeLedgerId) ?? defaultLedger;
+
+  const create = (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const ledger = { id: crypto.randomUUID(), name: trimmed, createdAt: today };
+    const next = [...ledgers, ledger];
+    setLedgers(next);
+    saveLedgers(next);
+    setName('');
+    setCreating(false);
+    setOpen(false);
+    changeLedger(ledger.id);
+  };
+
+  const saveRename = (id: string, e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = editName.trim();
+    if (!trimmed) return;
+    const next = ledgers.map((l) => (l.id === id ? { ...l, name: trimmed } : l));
+    setLedgers(next);
+    saveLedgers(next);
+    setEditingId(null);
+  };
+
+  return (
+    <div className="ledger-picker">
+      <button className="business-switcher" onClick={() => setOpen(!open)}>
+        <span>AKTİF DEFTER</span>
+        <strong>{active.name}</strong>
+        <ChevronDown size={16} />
+      </button>
+      {open && (
+        <div className="ledger-menu">
+          {ledgers.map((ledger) => (
+            <div key={ledger.id} className={"ledger-item-row " + (ledger.id === activeLedgerId ? "selected" : "")}>
+              {editingId === ledger.id ? (
+                <form onSubmit={(e) => saveRename(ledger.id, e)} className="rename-ledger-form">
+                  <input
+                    autoFocus
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Defter adı"
+                  />
+                  <button type="submit" className="primary-button btn-xs">Kaydet</button>
+                  <button type="button" className="secondary-button btn-xs" onClick={() => setEditingId(null)}>X</button>
+                </form>
+              ) : (
+                <div className="ledger-row-content">
+                  <button
+                    type="button"
+                    className="ledger-select-btn"
+                    onClick={() => {
+                      changeLedger(ledger.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <span>{ledger.name}</span>
+                    <small>{ledger.id === activeLedgerId ? "Aktif" : "Defteri aç"}</small>
+                  </button>
+                  <button
+                    type="button"
+                    className="ledger-rename-btn"
+                    title="Defter adını değiştir"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingId(ledger.id);
+                      setEditName(ledger.name);
+                    }}
+                  >
+                    <Pencil size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          {creating ? (
+            <form onSubmit={create} className="new-ledger-form">
+              <input
+                autoFocus
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Yeni şirket / defter adı"
+              />
+              <button className="primary-button">Oluştur</button>
+            </form>
+          ) : (
+            <button className="new-ledger-button" onClick={() => setCreating(true)}>
+              <Plus size={15} /> Yeni defter aç
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 function LoadingScreen() { return <div className="auth-page"><div className="auth-card loading-card"><div className="brand-mark"><Banknote size={19} /></div><h1>Hesap Defteri</h1><p>Oturumunuz kontrol ediliyor...</p></div></div> }
 function AuthScreen() { const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login'); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [companyName, setCompanyName] = useState(''); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const submit = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); setLoading(true); setMessage(''); setError(''); if (!supabase) return; const result = mode === 'login' ? await supabase.auth.signInWithPassword({ email, password }) : mode === 'register' ? await supabase.auth.signUp({ email, password, options: { data: { company_name: companyName } } }) : await supabase.auth.resetPasswordForEmail(email); setLoading(false); if (result.error) { setError(authError(result.error.message)); return } setMessage(mode === 'register' ? 'Kayıt başarılı. E-posta doğrulaması açıksa gelen kutunuzu kontrol edin.' : mode === 'reset' ? 'Şifre yenileme bağlantısı e-posta adresinize gönderildi.' : '') }; return <div className="auth-page"><div className="auth-card"><div className="auth-brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><h1>{mode === 'login' ? 'Tekrar hoş geldiniz' : mode === 'register' ? 'İşletmenizi oluşturun' : 'Şifrenizi yenileyin'}</h1><p className="auth-lead">Hesaplarınıza güvenle erişin.</p><form className="auth-form" onSubmit={submit}>{mode === 'register' && <label>İşletme adı<input value={companyName} onChange={(event) => setCompanyName(event.target.value)} required placeholder="Örn. Ninehatun İnşaat" /></label>}<label>E-posta<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="ornek@firma.com" /></label>{mode !== 'reset' && <label>Şifre<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} placeholder="En az 8 karakter" /></label>}{error && <p className="auth-error">{error}</p>}{message && <p className="auth-message">{message}</p>}<button className="primary-button auth-submit" disabled={loading}>{loading ? 'İşleniyor...' : mode === 'login' ? 'Giriş yap' : mode === 'register' ? 'Hesap oluştur' : 'Bağlantı gönder'}</button></form>{mode === 'login' && <button className="auth-link" onClick={() => setMode('reset')}>Şifremi unuttum</button>}<div className="auth-switch"><button onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Yeni hesap oluştur' : 'Giriş ekranına dön'}</button></div></div></div> }
 function authError(message: string) { if (message.includes('Invalid login')) return 'E-posta veya şifre hatalı.'; if (message.includes('already registered')) return 'Bu e-posta adresi zaten kayıtlı.'; return 'İşlem tamamlanamadı. Bilgilerinizi kontrol edip tekrar deneyin.' }
 
-function DateField({ defaultValue, name = 'date' }: { defaultValue: string; name?: string }) { const [value, setValue] = useState(formatDateForForm(defaultValue)); return <input name={name} type="text" inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value)} placeholder="28.10.2026" aria-label="Tarih (gün.ay.yıl)" required /> }
+function DateField({ defaultValue, name = 'date' }: { defaultValue: string; name?: string }) {
+  const initialIso = defaultValue.includes('.') ? parseDateInput(defaultValue) : defaultValue;
+  const [textValue, setTextValue] = useState(formatDateForForm(initialIso));
+  const [isoValue, setIsoValue] = useState(initialIso);
+  const datePickerRef = useRef<HTMLInputElement>(null);
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTextValue(e.target.value);
+    const parsed = parseDateInput(e.target.value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(parsed)) {
+      setIsoValue(parsed);
+    }
+  };
+
+  const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedIso = e.target.value;
+    if (selectedIso) {
+      setIsoValue(selectedIso);
+      setTextValue(formatDateForForm(selectedIso));
+    }
+  };
+
+  const openCalendar = () => {
+    if (datePickerRef.current) {
+      try {
+        datePickerRef.current.showPicker();
+      } catch {
+        datePickerRef.current.focus();
+      }
+    }
+  };
+
+  return (
+    <div className="date-field-wrapper">
+      <input
+        name={name}
+        type="text"
+        inputMode="numeric"
+        value={textValue}
+        onChange={handleTextChange}
+        placeholder="29.10.2026"
+        aria-label="Tarih (gün.ay.yıl)"
+        required
+      />
+      <button
+        type="button"
+        className="date-picker-toggle-btn"
+        onClick={openCalendar}
+        title="Takvimden seç"
+        aria-label="Takvimden seç"
+      >
+        <CalendarDays size={16} />
+      </button>
+      <input
+        ref={datePickerRef}
+        type="date"
+        className="date-picker-native-hidden"
+        value={isoValue}
+        onChange={handlePickerChange}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
 function ContactField({ contacts, defaultValue }: { contacts: Contact[]; defaultValue: string }) { const [value, setValue] = useState(defaultValue); const [focused, setFocused] = useState(false); const suggestions = contacts.filter((contact) => contact.name.toLocaleLowerCase('tr').includes(value.toLocaleLowerCase('tr'))).slice(0, 5); return <div className="contact-field"><input name="contact" value={value} onFocus={() => setFocused(true)} onChange={(event) => { setValue(event.target.value); setFocused(true) }} onBlur={() => setTimeout(() => setFocused(false), 120)} placeholder="Kişi veya firma ara..." autoComplete="off" />{focused && suggestions.length > 0 && <div className="contact-suggestions">{suggestions.map((contact) => <button type="button" key={contact.id} onMouseDown={() => { setValue(contact.name); setFocused(false) }}><strong>{contact.name}</strong><span>{contact.role}</span></button>)}</div>}</div> }
 
 function Dashboard({ activeLedger, metrics, state, period, setPeriod, customFrom, customTo, setCustomFrom, setCustomTo, onAdd, onNavigate }: { activeLedger: Ledger; metrics: { income: number; expense: number; payables: number; receivables: number; topPayments: [string, number][]; checkTotal: number; upcomingChecks: Transaction[]; overdueChecks: Transaction[]; overdueTotal: number }; state: AppState; period: Period; setPeriod: (period: Period) => void; customFrom: string; customTo: string; setCustomFrom: (value: string) => void; setCustomTo: (value: string) => void; onAdd: () => void; onNavigate: (section: Section) => void }) { const periodLabel = period === 'today' ? 'Bugün' : period === 'month' ? 'Bu ay' : period === 'all' ? 'Tüm zamanlar' : 'Özel dönem'; return <><PageTitle title={activeLedger.name} description="Defterinizin finansal görünümü." action={onAdd} actionLabel="Yeni kayıt" /><div className="period-toolbar"><div className="period-title"><CalendarDays size={17} /><strong>Görüntüleme dönemi</strong></div><div className="period-tabs">{[['today', 'Günlük'], ['month', 'Aylık'], ['all', 'Tümü'], ['custom', 'Özel']].map(([value, label]) => <button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value as Period)}>{label}</button>)}</div>{period === 'custom' && <div className="date-range"><input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /><span>-</span><input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} /></div>}<span className="period-caption">{periodLabel} hesapları</span></div><div className="notice"><strong>{activeLedger.name} defteri açık</strong><span>Bu ekrandaki tüm toplamlar yalnızca seçili deftere aittir.</span></div><section className="metric-grid"><Metric label={`${periodLabel} geliri`} value={metrics.income} icon={<ArrowDownLeft size={18} />} tone="positive" /><Metric label={`${periodLabel} gideri`} value={metrics.expense} icon={<ArrowUpRight size={18} />} tone="negative" /><Metric label="Açık borç" value={metrics.payables} icon={<WalletCards size={18} />} tone="orange" /><Metric label="Açık alacak" value={metrics.receivables} icon={<Banknote size={18} />} tone="blue" /></section><div className="dashboard-grid"><section className="panel"><div className="panel-heading"><div><h2>Son işlemler</h2><p className="muted">{periodLabel} dönemindeki hareketler</p></div><button className="text-button" onClick={() => onNavigate('transactions')}>Tümünü gör <ArrowUpRight size={15} /></button></div>{state.transactions.length ? <TransactionList transactions={state.transactions.slice(0, 5)} /> : <Empty icon={<WalletCards size={21} />} title="Henüz işlem yok" text="İlk gelir veya gider kaydınızı ekleyin." action="Yeni kayıt ekle" onClick={onAdd} />}</section><section className="panel"><div className="panel-heading"><div><h2>En çok ödeme yapılanlar</h2><p className="muted">{periodLabel} kişi bazında</p></div><Users size={20} className="muted-icon" /></div>{metrics.topPayments.length ? <div className="payer-list">{metrics.topPayments.map(([name, amount], index) => <div className="payer-row" key={name}><span className="payer-rank">{index + 1}</span><div className="payer-name"><strong>{name}</strong><span>Ödeme / gider</span></div><strong className="negative">{currency.format(amount)}</strong></div>)}</div> : <Empty icon={<Users size={21} />} title="Bu dönemde ödeme yok" text="Kişi seçerek ödeme veya gider kaydı eklediğinizde burada görünür." action="Kayıt ekle" onClick={onAdd} />}</section></div>{(metrics.upcomingChecks.length > 0 || metrics.overdueChecks.length > 0) && <section className="panel check-panel"><div className="panel-heading"><div><h2>Çek Takibi</h2><p className="muted">Vadesi yaklaşan ve geçmiş çekler</p></div><Clock size={20} className="muted-icon" /></div>{metrics.overdueChecks.length > 0 && <div className="overdue-notice"><strong>⚠ {metrics.overdueChecks.length} çekin vadesi geçmiş</strong><span>Toplam {currency.format(metrics.overdueTotal)}</span></div>}{metrics.upcomingChecks.map((check) => <div className="check-row" key={check.id}><div className="check-icon"><Banknote size={16} /></div><div className="transaction-info"><strong>{check.description}</strong><span>Çek No: {check.checkNumber || '—'} · {check.contact || 'Kişi belirtilmemiş'}</span></div><div className="check-meta"><strong className="negative">{currency.format(check.amount)}</strong><span className={`check-date${check.checkDate && check.checkDate < today ? " overdue" : ""}`}>Vade: {check.checkDate ? formatDateForForm(check.checkDate) : '—'}</span></div></div>)}</section>}</> }
@@ -286,4 +475,41 @@ function UpdateWidget({ updateState, installedVersion, onCheck, onDownload, onIn
       )}
     </div>
   )
+}
+
+function OnboardingModal({ onComplete }: { onComplete: (name: string) => void }) {
+  const [val, setVal] = useState('');
+  return (
+    <div className="modal-backdrop">
+      <div className="modal onboarding-modal">
+        <div className="onboarding-header">
+          <div className="brand-mark-lg"><Banknote size={28} /></div>
+          <h2>Hesap Defteri'ne Hoş Geldiniz!</h2>
+          <p>Finansal kayıtlarınızı tutmaya başlamak için işletmenizin, dükkanınızın veya şahsi defterinizin adını belirleyin.</p>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onComplete(val);
+          }}
+          className="onboarding-form"
+        >
+          <label>
+            İşletme / Defter Adı
+            <input
+              autoFocus
+              type="text"
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              placeholder="Örn. Yılmaz Ticaret, Özkan İnşaat veya Şahsi Hesabım"
+              required
+            />
+          </label>
+          <button type="submit" className="primary-button onboarding-submit-btn">
+            Defteri Oluştur ve Başla
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 }

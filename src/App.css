@@ -251,3 +251,152 @@ button,input,select { font:inherit; } button { cursor:pointer; }
   margin-bottom: 8px;
   padding-left: 4px;
 }
+
+
+/* ── Takvimli Tarih Seçici Stilleri ────────────────────────── */
+.date-field-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.date-field-wrapper input[type="text"] {
+  width: 100%;
+  padding-right: 38px !important;
+}
+.date-picker-toggle-btn {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: all 0.15s ease;
+}
+.date-picker-toggle-btn:hover {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.date-picker-native-hidden {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+
+/* ── Onboarding Modal & Defter Düzenleme Stilleri ──────────────── */
+.onboarding-modal {
+  max-width: 440px !important;
+  text-align: center;
+  padding: 32px 28px !important;
+}
+.brand-mark-lg {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--green);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(35, 120, 77, 0.25);
+}
+.onboarding-header h2 {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+.onboarding-header p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 22px;
+}
+.onboarding-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+.onboarding-submit-btn {
+  width: 100%;
+  padding: 12px !important;
+  font-size: 13px !important;
+  margin-top: 6px;
+}
+
+/* Ledger Switcher Düzenlemeleri */
+.ledger-item-row {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: background 0.15s;
+}
+.ledger-item-row:hover,
+.ledger-item-row.selected {
+  background: var(--green-soft);
+}
+.ledger-row-content {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ledger-select-btn {
+  flex: 1;
+  text-align: left;
+  padding: 10px 11px;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ledger-select-btn small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.ledger-rename-btn {
+  padding: 6px 8px;
+  margin-right: 6px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  border-radius: 5px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.ledger-rename-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--green);
+}
+.rename-ledger-form {
+  width: 100%;
+  display: flex;
+  gap: 5px;
+  padding: 6px;
+}
+.rename-ledger-form input {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.btn-xs {
+  padding: 6px 9px !important;
+  font-size: 10px !important;
+}
