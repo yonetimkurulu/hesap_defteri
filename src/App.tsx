@@ -1,5 +1,25 @@
+declare global {
+  interface Window {
+    hesapDefteriDesktop?: {
+      platform: string
+      version: string
+      checkForUpdates: () => Promise<unknown>
+      downloadUpdate: () => Promise<unknown>
+      quitAndInstall: () => Promise<void>
+      getAppVersion: () => Promise<string>
+      onUpdateStatus: (callback: (data: { status: string; version?: string; percent?: number; message?: string }) => void) => () => void
+    }
+  }
+}
+
+type UpdateState = {
+  status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error'
+  version?: string
+  percent?: number
+  message?: string
+}
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, Banknote, BriefcaseBusiness, CalendarDays, ChevronDown, CircleHelp, Clock, Download, FileDown, LayoutDashboard, Menu, Pencil, Plus, Search, Trash2, Users, WalletCards, X } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Banknote, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, CircleHelp, Clock, Download, FileDown, LayoutDashboard, Menu, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Users, WalletCards, X } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { listUserCompanies, loadCompanyData } from './lib/supabase-data'
@@ -53,6 +73,33 @@ function App() {
   const [query, setQuery] = useState('')
   const [transactionKind, setTransactionKind] = useState<TransactionKind>('expense')
   const [remoteError, setRemoteError] = useState('')
+  const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
+  const [installedVersion, setInstalledVersion] = useState<string>('0.1.3')
+
+  useEffect(() => {
+    if (!window.hesapDefteriDesktop) return
+    window.hesapDefteriDesktop.getAppVersion().then((v) => { if (v) setInstalledVersion(v) }).catch(() => {})
+    const unsubscribe = window.hesapDefteriDesktop.onUpdateStatus((data) => {
+      setUpdateState((prev) => ({ ...prev, ...data } as UpdateState))
+    })
+    return () => unsubscribe()
+  }, [])
+
+  const checkForUpdate = () => {
+    if (!window.hesapDefteriDesktop) return
+    setUpdateState({ status: 'checking' })
+    window.hesapDefteriDesktop.checkForUpdates()
+  }
+
+  const startDownload = () => {
+    if (!window.hesapDefteriDesktop) return
+    window.hesapDefteriDesktop.downloadUpdate()
+  }
+
+  const installAndRestart = () => {
+    if (!window.hesapDefteriDesktop) return
+    window.hesapDefteriDesktop.quitAndInstall()
+  }
 
   useEffect(() => {
     if (!supabase) return
@@ -129,7 +176,40 @@ function App() {
   const deleteTransaction = (id: string) => { persist({ ...state, transactions: state.transactions.filter((item) => item.id !== id) }) }
   const visibleTransactions = state.transactions.filter((item) => `${item.description} ${item.category} ${item.contact || ''}`.toLocaleLowerCase('tr').includes(query.toLocaleLowerCase('tr')))
 
-  return <div className="app-shell"><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} /><nav>{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMobileNav(false) }}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-bottom"><a className="download-link" href={desktopDownloadUrl} target="_blank" rel="noreferrer"><Download size={18} />Windows uygulamasını indir</a><div className="profile"><div className="avatar">HD</div><div><strong>Yerel çalışma</strong><span>{activeLedger.name}</span></div></div></div></aside>{mobileNav && <button className="backdrop" aria-label="Menüyü kapat" onClick={() => setMobileNav(false)} />}<main className="main-content"><header className="topbar"><button className="icon-button menu-button" aria-label="Menüyü aç" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="breadcrumb"><span>{activeLedger.name}</span><b>/</b><strong>{navItems.find((item) => item.id === section)?.label}</strong></div><div className="top-actions"><span className="online"><i />{remoteError ? 'Bağlantı hatası' : isSupabaseConfigured ? 'Güvenli bağlantı' : 'Yerel çalışma modu'}</span><button className="icon-button" aria-label="Yardım"><CircleHelp size={20} /></button><div className="mini-avatar">HD</div></div></header><div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} onAdd={() => setModal('contact')} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}</div>
+  return <div className="app-shell"><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} /><nav>{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMobileNav(false) }}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-bottom"><UpdateWidget updateState={updateState} installedVersion={installedVersion} onCheck={checkForUpdate} onDownload={startDownload} onInstall={installAndRestart} />
+<a className="download-link" href={desktopDownloadUrl} target="_blank" rel="noreferrer"><Download size={18} />Web / Sürümler</a>
+<div className="profile"><div className="avatar">HD</div><div><strong>Yerel çalışma</strong><span>{activeLedger.name}</span></div></div>
+</div></aside>{mobileNav && <button className="backdrop" aria-label="Menüyü kapat" onClick={() => setMobileNav(false)} />}<main className="main-content"><header className="topbar"><button className="icon-button menu-button" aria-label="Menüyü aç" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="breadcrumb"><span>{activeLedger.name}</span><b>/</b><strong>{navItems.find((item) => item.id === section)?.label}</strong></div><div className="top-actions"><span className="online"><i />{remoteError ? 'Bağlantı hatası' : isSupabaseConfigured ? 'Güvenli bağlantı' : 'Yerel çalışma modu'}</span><button className="icon-button" aria-label="Yardım"><CircleHelp size={20} /></button><div className="mini-avatar">HD</div></div></header>{updateState.status !== 'idle' && updateState.status !== 'not-available' && (
+  <div className={"update-banner update-banner-" + updateState.status}>
+
+    {updateState.status === 'checking' && <span><RefreshCw size={15} className="spin" /> Güncellemeler denetleniyor...</span>}
+    {updateState.status === 'available' && (
+      <>
+        <div className="update-text"><Sparkles size={16} /> <strong>Yeni sürüm mevcut (v{updateState.version})!</strong> Hiçbir kaydınız silinmeden güncelleyebilirsiniz.</div>
+        <button type="button" className="primary-button btn-update-action" onClick={startDownload}>Şimdi Güncelle</button>
+      </>
+    )}
+    {updateState.status === 'downloading' && (
+      <div className="update-downloading">
+        <span>Güncelleme indiriliyor... %{updateState.percent ?? 0}</span>
+        <div className="update-progress-bar"><div className="update-progress-fill" style={{ width: (updateState.percent || 0) + "%" }} /></div>
+      </div>
+    )}
+    {updateState.status === 'downloaded' && (
+      <>
+        <div className="update-text"><CheckCircle2 size={16} /> <strong>Güncelleme indirildi!</strong> Uygulama yeniden başlatılarak yüklenecek.</div>
+        <button type="button" className="primary-button btn-update-action btn-install" onClick={installAndRestart}>Yeniden Başlat ve Yükle</button>
+      </>
+    )}
+    {updateState.status === 'error' && (
+      <>
+        <span className="update-error-text">Güncelleme kontrolünde hata: {updateState.message || 'Bilinmeyen hata'}</span>
+        <button type="button" className="secondary-button btn-update-sm" onClick={() => setUpdateState({ status: 'idle' })}>Kapat</button>
+      </>
+    )}
+  </div>
+)}
+<div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} onAdd={() => setModal('contact')} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}</div>
 }
 
 function LedgerSwitcher({ ledgers, activeLedgerId, setLedgers }: { ledgers: Ledger[]; activeLedgerId: string; setLedgers: (ledgers: Ledger[]) => void }) { const [open, setOpen] = useState(false); const [creating, setCreating] = useState(false); const [name, setName] = useState(''); const create = (event: React.FormEvent) => { event.preventDefault(); const trimmed = name.trim(); if (!trimmed) return; const ledger = { id: crypto.randomUUID(), name: trimmed, createdAt: today }; const next = [...ledgers, ledger]; setLedgers(next); saveLedgers(next); setName(''); setCreating(false); setOpen(false); changeLedger(ledger.id) }; const active = ledgers.find((ledger) => ledger.id === activeLedgerId) ?? defaultLedger; return <div className="ledger-picker"><button className="business-switcher" onClick={() => setOpen(!open)}><span>AKTİF DEFTER</span><strong>{active.name}</strong><ChevronDown size={16} /></button>{open && <div className="ledger-menu">{ledgers.map((ledger) => <button key={ledger.id} className={ledger.id === activeLedgerId ? 'selected' : ''} onClick={() => { changeLedger(ledger.id); setOpen(false) }}>{ledger.name}<small>Defteri aç</small></button>)}{creating ? <form onSubmit={create} className="new-ledger-form"><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Yeni şirket adı" /><button className="primary-button">Oluştur</button></form> : <button className="new-ledger-button" onClick={() => setCreating(true)}><Plus size={15} /> Yeni defter aç</button>}</div>}</div> }
@@ -168,3 +248,42 @@ export default App
 
 
 
+
+function UpdateWidget({ updateState, installedVersion, onCheck, onDownload, onInstall }: { updateState: UpdateState; installedVersion: string; onCheck: () => void; onDownload: () => void; onInstall: () => void }) {
+  const isDesktop = typeof window !== 'undefined' && Boolean(window.hesapDefteriDesktop)
+  if (!isDesktop) {
+    return <div className="app-version-tag"><span>Sürüm v{installedVersion} (Web)</span></div>
+  }
+  return (
+    <div className="desktop-update-card">
+      <div className="desktop-version-info">
+        <span>Masaüstü v{installedVersion}</span>
+        {updateState.status === 'checking' && <RefreshCw size={13} className="spin" />}
+      </div>
+      {updateState.status === 'idle' && (
+        <button type="button" className="check-update-btn" onClick={onCheck}>
+          <RefreshCw size={12} /> Güncellemeleri Denetle
+        </button>
+      )}
+      {updateState.status === 'not-available' && (
+        <span className="update-up-to-date"><CheckCircle2 size={12} /> En son sürümdesiniz</span>
+      )}
+      {updateState.status === 'available' && (
+        <button type="button" className="update-action-btn" onClick={onDownload}>
+          <Sparkles size={12} /> v{updateState.version}'e Güncelle
+        </button>
+      )}
+      {updateState.status === 'downloading' && (
+        <div className="update-mini-progress">
+          <span>İndiriliyor: %{updateState.percent ?? 0}</span>
+          <div className="mini-progress-bar"><div className="mini-progress-fill" style={{ width: (updateState.percent || 0) + "%" }} /></div>
+        </div>
+      )}
+      {updateState.status === 'downloaded' && (
+        <button type="button" className="update-action-btn install-btn" onClick={onInstall}>
+          <CheckCircle2 size={12} /> Yeniden Başlat & Kur
+        </button>
+      )}
+    </div>
+  )
+}

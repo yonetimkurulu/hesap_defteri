@@ -1,4 +1,4 @@
-﻿# Hesap Defteri
+# Hesap Defteri
 
 Türkiye'deki küçük işletmeler için gelir, gider, borç, alacak, kişi ve proje takibi.
 
@@ -39,19 +39,28 @@ git push origin v0.1.0
 
 GitHub Actions Windows dosyalarını üretip Release’e ekler. Sitedeki indirme düğmesi bu Release dosyasını kullanır.
 
-## Otomatik güncelleme
+## Otomatik güncelleme (Uygulama İçi)
 
-Masaüstü uygulaması `electron-updater` ile GitHub Releases üzerinden otomatik güncelleme destekler. Uygulama her açılışta arka planda yeni sürüm olup olmadığını kontrol eder. Yeni sürüm bulunursa kullanıcıya indirme ve yeniden başlatma seçeneği sunar. Güncelleme sırasında yerel kayıtlar korunur.
+Masaüstü uygulaması `electron-updater` ile GitHub Releases üzerinden tam otomatik güncelleme destekler.
 
-Yeni sürüm yayınlamak için:
+- **Uygulama İçi Güncelleme:** Uygulama açılışta veya sol alttaki **"Güncellemeleri Denetle"** butonuna basıldığında yeni sürüm kontrol edilir.
+- **Tek Tıkla İndirme:** Yeni sürüm çıktığında üst barda yeşil bildirim çubuğu çıkar: `Yeni sürüm mevcut (v0.1.4)! [Şimdi Güncelle]`.
+- **Canlı İlerleme:** İndirme arka planda çalışırken `%` ilerleme çubuğu gösterilir.
+- **Kayıtlar Asla Silinmez:** İndirme tamamlanınca `[Yeniden Başlat ve Yükle]` butonuna basılır; uygulama saniyeler içinde yeni sürüme geçer ve tüm verileriniz aynen korunur.
+
+### Bir sonraki güncellemeyi yayınlama adımları:
 
 ```bash
-# package.json'daki version'ı artırın, sonra:
-git tag v0.1.3
-git push origin v0.1.3
+# 1. package.json içindeki version'ı artırın (örn. "0.1.4")
+# 2. Değişiklikleri commit edip tag atın:
+git add .
+git commit -m "feat: yeni güncelleme"
+git tag v0.1.4
+git push origin main
+git push origin v0.1.4
 ```
 
-GitHub Actions otomatik olarak NSIS installer, portable exe ve `latest.yml` dosyasını oluşturup Release'e yükler. Mevcut kullanıcılar uygulamayı açtığında güncelleme bildirimi alır.
+GitHub Actions Windows paketlerini ve `latest.yml` dosyasını otomatik üretip Release'e ekler. Bilgisayarında uygulama yüklü olan herkes uygulamayı açtığında güncelleme butonunu görür.
 
 Çek kaydı, normal giderden ayrı tutulur. Çek türünde çek numarası ve vade/ödeme tarihi girilir; vade tarihi işlem geçmişinde gösterilir ve çek tutarı nakit gider toplamına otomatik eklenmez.
 

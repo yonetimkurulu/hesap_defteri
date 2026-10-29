@@ -1,10 +1,10 @@
-const { app, BrowserWindow, shell, dialog, ipcMain } = require('electron')
+const { app, BrowserWindow, shell, ipcMain } = require('electron')
 const path = require('node:path')
 const { autoUpdater } = require('electron-updater')
 
 // ── Auto-updater ayarları ──────────────────────────────────────────
-autoUpdater.autoDownload = false          // Kullanıcıya sorup indirsin
-autoUpdater.autoInstallOnAppQuit = true   // İndirdikten sonra kapanışta kursun
+autoUpdater.autoDownload = false          // Kullanıcı arayüzden butona basınca indirsin
+autoUpdater.autoInstallOnAppQuit = true   // İndirildikten sonra uygulama kapanırsa yine de kurulsun
 
 let mainWindow = null
 
@@ -31,84 +31,73 @@ function createWindow() {
   })
 }
 
-// ── Auto-update olayları ───────────────────────────────────────────
-autoUpdater.on('update-available', (info) => {
-  if (!mainWindow) return
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Güncelleme mevcut',
-    message: `Yeni sürüm ${info.version} yayınlandı.\nŞimdi indirmek ister misiniz?`,
-    detail: 'Güncelleme arka planda indirilecek ve uygulama kapandığında kurulacaktır.',
-    buttons: ['İndir', 'Daha sonra'],
-    defaultId: 0,
-    cancelId: 1,
-  }).then(({ response }) => {
-    if (response === 0) {
-      autoUpdater.downloadUpdate()
-      // İndirme başladığını renderer'a bildir
-      mainWindow.webContents.send('update-status', { status: 'downloading' })
-    }
-  })
+// ── Auto-update olayları (Renderer'a bildirim) ─────────────────────
+function sendUpdateStatus(data) {
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('update-status', data)
+  }
+}
+
+autoUpdater.on('checking-for-update', () => {
+  sendUpdateStatus({ status: 'checking' })
 })
 
-autoUpdater.on('update-downloaded', () => {
-  if (!mainWindow) return
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Güncelleme hazır',
-    message: 'Güncelleme indirildi. Şimdi yeniden başlatmak ister misiniz?',
-    detail: 'Kayıtlarınız korunacaktır.',
-    buttons: ['Şimdi yeniden başlat', 'Daha sonra'],
-    defaultId: 0,
-    cancelId: 1,
-  }).then(({ response }) => {
-    if (response === 0) {
-      autoUpdater.quitAndInstall(false, true)
-    }
+autoUpdater.on('update-available', (info) => {
+  sendUpdateStatus({
+    status: 'available',
+    version: info.version,
+    releaseDate: info.releaseDate,
   })
 })
 
 autoUpdater.on('update-not-available', () => {
-  // Manuel kontrol yapıldıysa bilgilendir
-  if (manualCheckTriggered) {
-    manualCheckTriggered = false
-    if (mainWindow) {
-      dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Güncel',
-        message: 'Uygulamanız zaten en son sürümde.',
-      })
-    }
-  }
+  sendUpdateStatus({ status: 'not-available' })
 })
 
 autoUpdater.on('error', (err) => {
-  if (manualCheckTriggered && mainWindow) {
-    manualCheckTriggered = false
-    dialog.showMessageBox(mainWindow, {
-      type: 'warning',
-      title: 'Güncelleme hatası',
-      message: 'Güncelleme kontrol edilirken bir hata oluştu.',
-      detail: err?.message || String(err),
-    })
-  }
+  sendUpdateStatus({
+    status: 'error',
+    message: err?.message || String(err),
+  })
 })
 
 autoUpdater.on('download-progress', (progress) => {
   if (mainWindow) {
     mainWindow.setProgressBar(progress.percent / 100)
-    mainWindow.webContents.send('update-status', {
-      status: 'downloading',
-      percent: Math.round(progress.percent),
-    })
   }
+  sendUpdateStatus({
+    status: 'downloading',
+    percent: Math.round(progress.percent),
+    bytesPerSecond: progress.bytesPerSecond,
+    total: progress.total,
+    transferred: progress.transferred,
+  })
 })
 
-// Renderer'dan güncelleme kontrolü isteyebilsin
-let manualCheckTriggered = false
+autoUpdater.on('update-downloaded', (info) => {
+  if (mainWindow) {
+    mainWindow.setProgressBar(-1) // Progress bar'ı temizle
+  }
+  sendUpdateStatus({
+    status: 'downloaded',
+    version: info.version,
+  })
+})
+
+// ── Renderer'dan gelen IPC komutları ───────────────────────────────
 ipcMain.handle('check-for-updates', () => {
-  manualCheckTriggered = true
-  autoUpdater.checkForUpdates()
+  return autoUpdater.checkForUpdates().catch((err) => {
+    sendUpdateStatus({ status: 'error', message: err.message })
+  })
+})
+
+ipcMain.handle('start-download-update', () => {
+  sendUpdateStatus({ status: 'downloading', percent: 0 })
+  return autoUpdater.downloadUpdate()
+})
+
+ipcMain.handle('quit-and-install', () => {
+  autoUpdater.quitAndInstall(false, true)
 })
 
 ipcMain.handle('get-app-version', () => {
@@ -119,11 +108,9 @@ ipcMain.handle('get-app-version', () => {
 app.whenReady().then(() => {
   createWindow()
 
-  // Başlangıçta sessizce güncelleme kontrol et
+  // Başlangıçta 3 saniye sonra arka planda sessizce kontrol et
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {
-      // İnternet yoksa sessizce geç
-    })
+    autoUpdater.checkForUpdates().catch(() => {})
   }, 3000)
 
   app.on('activate', () => {
