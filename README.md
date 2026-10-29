@@ -4,7 +4,7 @@ Türkiye'deki küçük işletmeler için gelir, gider, borç, alacak, kişi ve p
 
 ## Durum
 
-Uygulama şu anda Supabase bağlantısı olmadan açıkça yerel çalışma modunda çalışır. Kayıtlar tarayıcı `localStorage` alanına yazılır; gerçek çok kiracılı kullanım için Supabase migration'ı uygulanmalı ve ortam değişkenleri tanımlanmalıdır.
+Uygulama şu anda **local-first** çalışır. Defterler, kişiler, projeler ve finansal kayıtlar bilgisayardaki tarayıcı `localStorage` alanında tutulur. Supabase migration'ı ve veri servisleri projede hazırdır ancak uzak backend açıkça etkinleştirilmediği sürece kullanılmaz.
 
 ## Çalıştırma
 
@@ -15,12 +15,39 @@ npm run dev
 
 Üretim build kontrolü: `npm run build`
 
-## Supabase kurulumu
+## Windows uygulaması
+
+Kurulum dosyası ve portable uygulama üretmek için:
+
+```bash
+npm run desktop:build
+```
+
+Çıktılar `release/` klasörüne gelir:
+
+- `Hesap Defteri Setup 0.1.0.exe`: Windows kurulum sihirbazı
+- `Hesap Defteri 0.1.0.exe`: Kurulumsuz portable sürüm
+
+Uygulama local-first olduğu için kayıtlar kullanıcının bilgisayarındaki uygulama verisinde tutulur. Yeni sürümlerde aynı uygulama veri alanı korunur; kullanıcı verisi temizlenmeden kayıtlar silinmez.
+
+GitHub üzerinden otomatik release üretmek için bir sürüm etiketi gönderin:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+GitHub Actions Windows dosyalarını üretip Release’e ekler. Sitedeki indirme düğmesi bu Release dosyasını kullanır.
+
+## Supabase geçiş planı
 
 1. Supabase projesinde `supabase/migrations/001_initial_schema.sql` dosyasını çalıştırın.
 2. `.env.example` dosyasını `.env` olarak kopyalayın.
 3. `VITE_SUPABASE_URL` ve `VITE_SUPABASE_ANON_KEY` değerlerini ekleyin.
-4. Kimlik doğrulama ve şirket üyeliği oluşturma akışını backend ile bağlayın.
+4. Geçiş yapılana kadar `VITE_ENABLE_REMOTE_BACKEND=false` bırakın.
+5. Uzak backend’e geçiş günü bu değeri `true` yapın ve yeni deployment alın.
+
+Anon/publishable key frontend’de kullanılabilir; `service_role` anahtarı frontend’e eklenmemelidir. RLS politikaları aktif olmadan uzak backend açılmamalıdır.
 
 ## Finansal model
 
@@ -30,9 +57,13 @@ npm run dev
 
 Yerel çalışma modunda kullanıcı, `Aktif defter` menüsünden birden fazla şirket defteri açabilir. Her defterin işlemleri, kişileri ve projeleri ayrı tutulur. Dashboard varsayılan olarak aylık görünür; günlük, tüm zamanlar ve özel tarih aralığı seçenekleri de vardır. Kişi alanı seçilerek girilen ödeme ve giderler, seçili dönemde “En çok ödeme yapılanlar” sıralamasında gösterilir.
 
+## Güncelleme ve veri korunması
+
+Yerel veri anahtarları sabit tutulur ve uygulama açılışında yalnızca `hesap-defteri-local-schema-version` işaretçisi güncellenir; mevcut kayıtlar silinmez. Gelecekteki veri modeli değişiklikleri bu sürüm üzerinden geriye dönük migration eklemelidir. Tarayıcı/site verileri temizlenirse local kayıtlar silinebilir; uzak backend’e geçişten önce JSON yedekleme/geri yükleme özelliği eklenmesi planlanmıştır.
+
 ## Bilinen sınırlar
 
-- Supabase Auth ve gerçek veri okuma/yazma UI'ya henüz bağlanmadı.
+- Supabase Auth ve gerçek veri okuma/yazma, opt-in geçiş aşamasında tutuluyor.
 - Ödeme aşımı, atomik settlement RPC'leri ve kapsamlı test suite bir sonraki aşamadır.
 - PWA manifesti kurulum metadata'sını içerir; üretim ikonları eklenmelidir.
 
