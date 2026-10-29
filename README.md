@@ -1,4 +1,4 @@
-# Hesap Defteri
+﻿# Hesap Defteri
 
 Türkiye'deki küçük işletmeler için gelir, gider, borç, alacak, kişi ve proje takibi.
 
@@ -25,8 +25,8 @@ npm run desktop:build
 
 Çıktılar `release/` klasörüne gelir:
 
-- `Hesap Defteri Setup 0.1.2.exe`: Windows kurulum sihirbazı
-- `Hesap Defteri 0.1.2.exe`: Kurulumsuz portable sürüm
+- `Hesap Defteri Setup 0.1.3.exe`: Windows kurulum sihirbazı
+- `Hesap Defteri 0.1.3.exe`: Kurulumsuz portable sürüm
 
 Uygulama local-first olduğu için kayıtlar Electron'un Windows `userData` klasöründe tutulur. `appId` sabit kaldığı için yeni setup sürümleri aynı klasörü kullanır ve güncelleme sırasında mevcut kayıtlar silinmez. Tarayıcı sürümünde kayıtlar aynı domain'in localStorage alanında tutulur.
 
@@ -38,6 +38,20 @@ git push origin v0.1.0
 ```
 
 GitHub Actions Windows dosyalarını üretip Release’e ekler. Sitedeki indirme düğmesi bu Release dosyasını kullanır.
+
+## Otomatik güncelleme
+
+Masaüstü uygulaması `electron-updater` ile GitHub Releases üzerinden otomatik güncelleme destekler. Uygulama her açılışta arka planda yeni sürüm olup olmadığını kontrol eder. Yeni sürüm bulunursa kullanıcıya indirme ve yeniden başlatma seçeneği sunar. Güncelleme sırasında yerel kayıtlar korunur.
+
+Yeni sürüm yayınlamak için:
+
+```bash
+# package.json'daki version'ı artırın, sonra:
+git tag v0.1.3
+git push origin v0.1.3
+```
+
+GitHub Actions otomatik olarak NSIS installer, portable exe ve `latest.yml` dosyasını oluşturup Release'e yükler. Mevcut kullanıcılar uygulamayı açtığında güncelleme bildirimi alır.
 
 Çek kaydı, normal giderden ayrı tutulur. Çek türünde çek numarası ve vade/ödeme tarihi girilir; vade tarihi işlem geçmişinde gösterilir ve çek tutarı nakit gider toplamına otomatik eklenmez.
 

@@ -41,3 +41,18 @@ button,input,select { font:inherit; } button { cursor:pointer; }
 .topbar { background:rgba(255,255,255,.92); border-bottom-color:#dbe5dd; }.page-wrap { max-width:1340px; padding-top:52px; }.page-heading h1 { font-size:37px; color:#102b1e; }.metric { box-shadow:var(--shadow); border-color:#d6e3d8; }.metric:nth-child(1) { border-top:4px solid #2f9b62; }.metric:nth-child(2) { border-top:4px solid #d46155; }.metric:nth-child(3) { border-top:4px solid #d79a35; }.metric:nth-child(4) { border-top:4px solid #5689bd; }.panel,.contact-card,.project-card { box-shadow:var(--shadow); border-color:#d6e3d8; }.notice { background:linear-gradient(100deg,#fff3d3,#fffaf0); border-color:#efdca6; color:#6f5217; }.notice span { color:#927541; }.period-toolbar { box-shadow:0 8px 22px rgba(29,70,44,.06); }.period-title svg,.period-tabs button.active { color:#1e7548; }
 @media (max-width:680px) { .page-heading h1 { font-size:30px; }.sidebar { background:#123b2b; } }
 .download-link { width:100%; display:flex; align-items:center; gap:12px; padding:11px 12px; color:#f4d477; background:rgba(232,180,77,.12); border:1px solid rgba(232,180,77,.25); border-radius:8px; text-decoration:none; text-align:left; font-size:12px; font-weight:700; }.download-link:hover { color:#173926; background:#e8b44d; }
+
+
+/* Çek takip paneli */
+.check-panel { margin-top:14px; grid-column:1/-1; }
+.check-row { display:flex; align-items:center; gap:11px; padding:12px 0; border-top:1px solid #edf2ee; }.check-row:first-of-type { border-top:0; }
+.check-icon { width:31px; height:31px; display:grid; place-items:center; color:var(--amber); background:var(--amber-soft); border-radius:8px; }
+.check-meta { text-align:right; white-space:nowrap; }.check-meta strong { display:block; font-size:12px; }.check-meta span { display:block; margin-top:3px; font-size:10px; color:var(--muted); }
+.check-date.overdue { color:var(--red); font-weight:700; }
+.overdue-notice { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; padding:10px 14px; color:#92400e; background:linear-gradient(100deg,#fef3c7,#fffbeb); border:1px solid #fde68a; border-radius:8px; font-size:12px; }.overdue-notice strong { font-weight:700; }.overdue-notice span { color:#b45309; font-weight:600; }
+
+/* Silme butonu */
+.delete-transaction:hover { color:var(--red)!important; background:var(--red-soft)!important; }
+
+/* Sürüm bilgisi sidebar */
+.app-version { display:block; margin-top:8px; padding:4px 9px; color:#7b9d89; font-size:9px; letter-spacing:.04em; }
