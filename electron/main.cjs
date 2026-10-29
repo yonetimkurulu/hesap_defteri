@@ -2,29 +2,45 @@ const { app, BrowserWindow, shell, ipcMain, Menu } = require('electron')
 const path = require('node:path')
 const { autoUpdater } = require('electron-updater')
 
-// ── Auto-updater ayarları ──────────────────────────────────────────
-autoUpdater.autoDownload = false          // Kullanıcı arayüzden butona basınca indirsin
-autoUpdater.autoInstallOnAppQuit = true   // İndirildikten sonra uygulama kapanırsa yine de kurulsun
+// ── Tek Örnek (Single Instance) Kilidi ──────────────────────────────
+// Kullanıcı uygulamayı 2. kez açarsa yeni pencere açmak yerine mevcudu öne getirir
+const gotTheLock = app.requestSingleInstanceLock()
 
-let mainWindow = null
-
-function createWindow() {
-  Menu.setApplicationMenu(null)
-  mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 920,
-    minWidth: 1024,
-    minHeight: 700,
-    backgroundColor: '#f3f7f3',
-    title: 'Hesap Defteri',
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
   })
+
+  // ── Auto-updater ayarları ──────────────────────────────────────────
+  autoUpdater.autoDownload = false          // Kullanıcı arayüzden butona basınca indirsin
+  autoUpdater.autoInstallOnAppQuit = true   // İndirildikten sonra uygulama kapanırsa yine de kurulsun
+
+  let mainWindow = null
+
+  function createWindow() {
+    Menu.setApplicationMenu(null)
+    mainWindow = new BrowserWindow({
+      width: 1440,
+      height: 920,
+      minWidth: 1024,
+      minHeight: 700,
+      backgroundColor: '#f3f7f3',
+      title: 'Hesap Defteri',
+      icon: path.join(__dirname, '..', 'build', 'icon.ico'),
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    })
 
   mainWindow.removeMenu()
 
@@ -140,3 +156,4 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+}

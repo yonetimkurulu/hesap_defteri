@@ -25,8 +25,8 @@ npm run desktop:build
 
 Çıktılar `release/` klasörüne gelir:
 
-- `Hesap-Defteri-Setup-0.2.5.exe`: Windows kurulum sihirbazı
-- `Hesap-Defteri-0.2.5.exe`: Kurulumsuz portable sürüm
+- `Hesap-Defteri-Setup-0.2.6.exe`: Windows kurulum sihirbazı
+- `Hesap-Defteri-0.2.6.exe`: Kurulumsuz portable sürüm
 
 Uygulama local-first olduğu için kayıtlar Electron'un Windows `userData` klasöründe tutulur. `appId` sabit kaldığı için yeni setup sürümleri aynı klasörü kullanır ve güncelleme sırasında mevcut kayıtlar silinmez. Tarayıcı sürümünde kayıtlar aynı domain'in localStorage alanında tutulur.
 
