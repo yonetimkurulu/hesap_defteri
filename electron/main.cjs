@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain } = require('electron')
+const { app, BrowserWindow, shell, ipcMain, Menu } = require('electron')
 const path = require('node:path')
 const { autoUpdater } = require('electron-updater')
 
@@ -9,6 +9,7 @@ autoUpdater.autoInstallOnAppQuit = true   // İndirildikten sonra uygulama kapan
 let mainWindow = null
 
 function createWindow() {
+  Menu.setApplicationMenu(null)
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
@@ -16,6 +17,7 @@ function createWindow() {
     minHeight: 700,
     backgroundColor: '#f3f7f3',
     title: 'Hesap Defteri',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -23,6 +25,8 @@ function createWindow() {
       sandbox: true,
     },
   })
+
+  mainWindow.removeMenu()
 
   mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

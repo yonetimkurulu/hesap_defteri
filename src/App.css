@@ -649,3 +649,39 @@ button,input,select { font:inherit; } button { cursor:pointer; }
   color: var(--muted);
   font-style: italic;
 }
+
+
+/* ── Kişi Düzenleme & Silme Buton Stilleri ──────────────────────── */
+.modal-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-sm {
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+}
+.btn-danger-sm {
+  color: var(--red) !important;
+}
+.btn-danger-sm:hover {
+  background: var(--red-soft) !important;
+  border-color: var(--red) !important;
+}
+
+.contact-quick-edit-btn {
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all 0.15s ease;
+  margin-right: 4px;
+}
+.contact-quick-edit-btn:hover {
+  background: var(--green-soft);
+  color: var(--green);
+}

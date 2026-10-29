@@ -95,7 +95,7 @@ function App() {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.1.9')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.2.0')
 
   useEffect(() => {
     if (!window.hesapDefteriDesktop) return
@@ -230,6 +230,25 @@ function App() {
     setModal(null)
   }
   const deleteTransaction = (id: string) => { persist({ ...state, transactions: state.transactions.filter((item) => item.id !== id) }) }
+
+  const updateContact = (updated: Contact) => {
+    const oldName = state.contacts.find((c) => c.id === updated.id)?.name;
+    const newContacts = state.contacts.map((c) => (c.id === updated.id ? updated : c));
+    // Eğer kişinin adı değiştiyse, o kişinin kayıtlarındaki adını da senkronize et
+    let newTransactions = state.transactions;
+    if (oldName && oldName.trim() !== updated.name.trim()) {
+      newTransactions = state.transactions.map((t) =>
+        (t.contact || '').trim().toLocaleLowerCase('tr') === oldName.trim().toLocaleLowerCase('tr')
+          ? { ...t, contact: updated.name.trim() }
+          : t
+      );
+    }
+    persist({ ...state, contacts: newContacts, transactions: newTransactions });
+  };
+
+  const deleteContact = (contactId: string) => {
+    persist({ ...state, contacts: state.contacts.filter((c) => c.id !== contactId) });
+  };
   const visibleTransactions = state.transactions.filter((item) => `${item.description} ${item.category} ${item.contact || ''}`.toLocaleLowerCase('tr').includes(query.toLocaleLowerCase('tr')))
 
   return <div className="app-shell"><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} /><nav>{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMobileNav(false) }}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-bottom"><UpdateWidget updateState={updateState} installedVersion={installedVersion} onCheck={checkForUpdate} onDownload={startDownload} onInstall={installAndRestart} />
@@ -265,7 +284,7 @@ function App() {
     )}
   </div>
 )}
-<div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} ledgers={ledgers} onAdd={() => setModal('contact')} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}
+<div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} ledgers={ledgers} onAdd={() => setModal('contact')} onUpdateContact={updateContact} onDeleteContact={deleteContact} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}
 {showOnboarding && <OnboardingModal onComplete={completeOnboarding} />}
 {renameModalOpen && (
   <RenameCompanyModal
@@ -464,8 +483,21 @@ type ContactLedgerSummary = {
   transactions: Transaction[];
 };
 
-function Contacts({ contacts, ledgers, onAdd }: { contacts: Contact[]; ledgers: Ledger[]; onAdd: () => void }) {
+function Contacts({
+  contacts,
+  ledgers,
+  onAdd,
+  onUpdateContact,
+  onDeleteContact,
+}: {
+  contacts: Contact[];
+  ledgers: Ledger[];
+  onAdd: () => void;
+  onUpdateContact: (contact: Contact) => void;
+  onDeleteContact: (id: string) => void;
+}) {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
 
   // Tüm defterlerdeki işlemleri kişi bazında derle
   const allLedgersData = useMemo(() => {
@@ -522,6 +554,17 @@ function Contacts({ contacts, ledgers, onAdd }: { contacts: Contact[]; ledgers: 
                     <strong>{contact.name}</strong>
                     <span>{contact.role}{contact.phone && ` · ${contact.phone}`}</span>
                   </div>
+                  <button
+                    type="button"
+                    className="contact-quick-edit-btn"
+                    title="Kişiyi Düzenle"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingContact(contact);
+                    }}
+                  >
+                    <Pencil size={14} />
+                  </button>
                   <div className="contact-total-paid">
                     <small>Toplam Verilen</small>
                     <strong className="negative">{currency.format(grandTotalPaid)}</strong>
@@ -559,11 +602,32 @@ function Contacts({ contacts, ledgers, onAdd }: { contacts: Contact[]; ledgers: 
         </section>
       )}
 
+      {editingContact && (
+        <EditContactModal
+          contact={editingContact}
+          onSave={(updated) => {
+            onUpdateContact(updated);
+            setEditingContact(null);
+          }}
+          onClose={() => setEditingContact(null)}
+        />
+      )}
+
       {selectedContact && (
         <ContactDetailModal
           contact={selectedContact}
           breakdown={getContactLedgerBreakdown(selectedContact.name)}
           onClose={() => setSelectedContact(null)}
+          onEdit={() => {
+            setEditingContact(selectedContact);
+            setSelectedContact(null);
+          }}
+          onDelete={() => {
+            if (confirm(`${selectedContact.name} kişisini silmek istediğinize emin misiniz?`)) {
+              onDeleteContact(selectedContact.id);
+              setSelectedContact(null);
+            }
+          }}
         />
       )}
     </>
@@ -574,10 +638,14 @@ function ContactDetailModal({
   contact,
   breakdown,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   contact: Contact;
   breakdown: ContactLedgerSummary[];
   onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const grandTotal = breakdown.reduce((sum, b) => sum + b.totalPaid, 0);
 
@@ -592,9 +660,27 @@ function ContactDetailModal({
               <p>{contact.role} {contact.phone ? `· ${contact.phone}` : ''}</p>
             </div>
           </div>
-          <button className="icon-button" aria-label="Kapat" onClick={onClose}>
-            <X size={19} />
-          </button>
+          <div className="modal-heading-actions">
+            <button
+              type="button"
+              className="secondary-button btn-sm"
+              onClick={onEdit}
+              title="Kişi bilgilerini düzenle"
+            >
+              <Pencil size={14} /> Düzenle
+            </button>
+            <button
+              type="button"
+              className="secondary-button btn-sm btn-danger-sm"
+              onClick={onDelete}
+              title="Kişiyi sil"
+            >
+              <Trash2 size={14} />
+            </button>
+            <button className="icon-button" aria-label="Kapat" onClick={onClose}>
+              <X size={19} />
+            </button>
+          </div>
         </div>
 
         <div className="contact-grand-total-banner">
@@ -791,6 +877,89 @@ function RenameCompanyModal({ currentName, onSave, onClose }: { currentName: str
           <div className="modal-actions wide">
             <button type="button" className="secondary-button" onClick={onClose}>Vazgeç</button>
             <button type="submit" className="primary-button">Şirket Adını Kaydet</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
+function EditContactModal({
+  contact,
+  onSave,
+  onClose,
+}: {
+  contact: Contact;
+  onSave: (updated: Contact) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(contact.name);
+  const [role, setRole] = useState(contact.role);
+  const [phone, setPhone] = useState(contact.phone || '');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onSave({
+      ...contact,
+      name: name.trim(),
+      role: role.trim(),
+      phone: phone.trim(),
+    });
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal" style={{ maxWidth: '440px' }}>
+        <div className="modal-heading">
+          <div>
+            <h2>Kişiyi Düzenle</h2>
+            <p>Kişi / firma bilgilerini güncelleyin.</p>
+          </div>
+          <button className="icon-button" aria-label="Kapat" onClick={onClose}>
+            <X size={19} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="form-grid">
+          <label className="wide">
+            Ad / Firma Adı
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Örn. Şenol Usta"
+              required
+            />
+          </label>
+          <label className="wide">
+            İlişki Türü
+            <select value={role} onChange={(e) => setRole(e.target.value)}>
+              <option>Usta</option>
+              <option>Taşeron</option>
+              <option>Tedarikçi</option>
+              <option>Müşteri</option>
+              <option>Çalışan</option>
+              <option>Diğer</option>
+            </select>
+          </label>
+          <label className="wide">
+            Telefon Numarası
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="05__ ___ __ __"
+            />
+          </label>
+          <div className="modal-actions wide">
+            <button type="button" className="secondary-button" onClick={onClose}>
+              Vazgeç
+            </button>
+            <button type="submit" className="primary-button">
+              Değişiklikleri Kaydet
+            </button>
           </div>
         </form>
       </div>
