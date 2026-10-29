@@ -443,3 +443,209 @@ button,input,select { font:inherit; } button { cursor:pointer; }
   background: var(--green);
   color: #fff;
 }
+
+
+/* ── Kişiler Defter Bazlı Kırılım Stilleri ─────────────────────── */
+.contact-card-clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.contact-card-clickable:hover {
+  transform: translateY(-2px);
+  border-color: var(--green);
+  box-shadow: 0 10px 24px rgba(35, 120, 77, 0.12);
+}
+.contact-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.contact-main-info {
+  flex: 1;
+  min-width: 0;
+}
+.contact-total-paid {
+  text-align: right;
+  white-space: nowrap;
+}
+.contact-total-paid small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+}
+.contact-total-paid strong {
+  font-size: 14px;
+}
+
+.contact-ledger-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--paper);
+  border-radius: 8px;
+  font-size: 11px;
+}
+.contact-ledger-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+.chip-name {
+  color: var(--ink);
+  font-weight: 500;
+}
+.muted-text {
+  color: var(--muted);
+}
+
+.contact-card-footer {
+  margin-top: auto;
+  padding-top: 4px;
+}
+.view-detail-hint {
+  font-size: 11px;
+  color: var(--green);
+  font-weight: 600;
+}
+
+/* Kişi Detay Modal */
+.contact-detail-modal {
+  max-width: 650px !important;
+}
+.contact-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.contact-avatar-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green-deep);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.contact-grand-total-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+.contact-grand-total-banner span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.contact-grand-total-banner strong {
+  font-size: 20px;
+}
+
+.contact-ledger-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.contact-ledger-block {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.contact-ledger-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fbfdfb;
+  border-bottom: 1px solid var(--line);
+}
+.contact-ledger-block-header h3 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.contact-ledger-block-header span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.badge-count {
+  font-size: 10px;
+  padding: 3px 8px;
+  background: var(--paper);
+  border-radius: 99px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.contact-tx-list {
+  display: flex;
+  flex-direction: column;
+}
+.contact-tx-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #edf2ee;
+  font-size: 12px;
+}
+.contact-tx-row:last-child {
+  border-bottom: none;
+}
+.tx-date-badge {
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+}
+.tx-date-badge span {
+  font-weight: 600;
+  color: var(--ink);
+}
+.tx-date-badge small {
+  font-size: 10px;
+  color: var(--muted);
+}
+.tx-desc-cell {
+  flex: 1;
+  min-width: 0;
+}
+.tx-desc-cell strong {
+  display: block;
+}
+.tx-check-info {
+  display: block;
+  font-size: 10px;
+  color: var(--amber);
+  margin-top: 2px;
+}
+.tx-amount-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+.contact-no-tx {
+  padding: 14px 16px;
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}

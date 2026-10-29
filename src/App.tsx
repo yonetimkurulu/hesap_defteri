@@ -94,7 +94,7 @@ function App() {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.1.5')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.1.6')
 
   useEffect(() => {
     if (!window.hesapDefteriDesktop) return
@@ -254,7 +254,7 @@ function App() {
     )}
   </div>
 )}
-<div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} onAdd={() => setModal('contact')} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}
+<div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} ledgers={ledgers} onAdd={() => setModal('contact')} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}
 {showOnboarding && <OnboardingModal onComplete={completeOnboarding} />}
 {renameModalOpen && (
   <RenameLedgerModal
@@ -445,7 +445,207 @@ function Dashboard({ activeLedger, metrics, state, period, setPeriod, customFrom
 function Metric({ label, value, icon, tone }: { label: string; value: number; icon: React.ReactNode; tone: string }) { return <article className="metric"><div className={`metric-icon ${tone}`}>{icon}</div><span>{label}</span><strong>{currency.format(value)}</strong><small>Seçili defter ve dönem</small></article> }
 function TransactionList({ transactions, onEdit, onDelete }: { transactions: Transaction[]; onEdit?: (transaction: Transaction) => void; onDelete?: (id: string) => void }) { return <div className="transaction-list">{transactions.map((item) => { const positive = item.kind === 'income' || item.kind === 'collection'; return <div className="transaction-row" key={item.id}><div className={`transaction-icon ${positive ? 'positive' : 'negative'}`}>{positive ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</div><div className="transaction-info"><strong>{item.description}</strong><span>{kindLabels[item.kind]} · {dateFormatter.format(new Date(`${item.date}T12:00:00`))}{item.contact && ` · ${item.contact}`}{item.kind === 'check' && item.checkDate && ` · Vade ${formatDateForForm(item.checkDate)}`}</span></div><strong className={positive ? 'positive' : 'negative'}>{positive ? '+' : '-'}{currency.format(item.amount)}</strong>{onEdit && <button className="edit-transaction" aria-label="İşlemi düzenle" onClick={() => onEdit(item)}><Pencil size={14} /></button>}{onDelete && <button className="edit-transaction delete-transaction" aria-label="İşlemi sil" onClick={() => { if (confirm('Bu kaydı silmek istediğinize emin misiniz?')) onDelete(item.id) }}><Trash2 size={14} /></button>}</div> })}</div> }
 function Transactions({ transactions, query, setQuery, onAdd, onEdit, onDelete }: { transactions: Transaction[]; query: string; setQuery: (value: string) => void; onAdd: () => void; onEdit: (transaction: Transaction) => void; onDelete: (id: string) => void }) { return <><PageTitle title="İşlemler" description="Gelir, gider, borç ve alacak hareketlerinizi yönetin." action={onAdd} actionLabel="Yeni işlem" /><div className="toolbar"><div className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="İşlem ara..." /></div><button className="filter-button"><CalendarDays size={16} /> Tarih <ChevronDown size={15} /></button><button className="filter-button">Tüm türler <ChevronDown size={15} /></button></div><section className="panel">{transactions.length ? <TransactionList transactions={transactions} onEdit={onEdit} onDelete={onDelete} /> : <Empty icon={<Search size={21} />} title={query ? 'Sonuç bulunamadı' : 'Henüz finansal kayıt yok'} text="Yeni bir kayıt ekleyerek başlayın." action="Yeni işlem ekle" onClick={onAdd} />}</section></> }
-function Contacts({ contacts, onAdd }: { contacts: Contact[]; onAdd: () => void }) { return <><PageTitle title="Kişiler ve cari hesaplar" description="Müşteri, tedarikçi ve iş ortaklarınızı yönetin." action={onAdd} actionLabel="Kişi ekle" />{contacts.length ? <div className="contact-grid">{contacts.map((contact) => <article className="contact-card" key={contact.id}><div className="contact-avatar">{contact.name.slice(0, 2).toLocaleUpperCase('tr')}</div><div><strong>{contact.name}</strong><span>{contact.role}{contact.phone && ` · ${contact.phone}`}</span></div><div className="contact-balance"><small>Bakiye</small><strong>{currency.format(contact.balance)}</strong></div></article>)}</div> : <section className="panel"><Empty icon={<Users size={21} />} title="Henüz kişi eklenmemiş" text="İlk müşterinizi veya tedarikçinizi ekleyin." action="İlk kişiyi ekle" onClick={onAdd} /></section>}</> }
+
+type ContactLedgerSummary = {
+  ledgerId: string;
+  ledgerName: string;
+  totalPaid: number;
+  transactions: Transaction[];
+};
+
+function Contacts({ contacts, ledgers, onAdd }: { contacts: Contact[]; ledgers: Ledger[]; onAdd: () => void }) {
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+
+  // Tüm defterlerdeki işlemleri kişi bazında derle
+  const allLedgersData = useMemo(() => {
+    return ledgers.map((l) => ({
+      ledger: l,
+      state: readState(l.id),
+    }));
+  }, [ledgers]);
+
+  const getContactLedgerBreakdown = (contactName: string): ContactLedgerSummary[] => {
+    const normalizedTarget = contactName.trim().toLocaleLowerCase('tr');
+    return allLedgersData.map(({ ledger, state: ledgerState }) => {
+      const txs = ledgerState.transactions.filter(
+        (t) => (t.contact || '').trim().toLocaleLowerCase('tr') === normalizedTarget
+      );
+      // Kişiye verilen ödeme, gider veya çek tutarı
+      const paid = txs
+        .filter((t) => t.kind === 'payment' || t.kind === 'expense' || t.kind === 'check')
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      return {
+        ledgerId: ledger.id,
+        ledgerName: ledger.name,
+        totalPaid: paid,
+        transactions: txs.sort((a, b) => b.date.localeCompare(a.date)),
+      };
+    });
+  };
+
+  return (
+    <>
+      <PageTitle
+        title="Kişiler ve cari hesaplar"
+        description="Müşteri, tedarikçi ve ustalarınızın tüm defterlerdeki ödemelerini inceleyin."
+        action={onAdd}
+        actionLabel="Kişi ekle"
+      />
+      {contacts.length ? (
+        <div className="contact-grid">
+          {contacts.map((contact) => {
+            const breakdown = getContactLedgerBreakdown(contact.name);
+            const grandTotalPaid = breakdown.reduce((sum, b) => sum + b.totalPaid, 0);
+
+            return (
+              <article
+                className="contact-card contact-card-clickable"
+                key={contact.id}
+                onClick={() => setSelectedContact(contact)}
+                title="Detaylı defter dökümünü gör"
+              >
+                <div className="contact-card-header">
+                  <div className="contact-avatar">{getInitials(contact.name)}</div>
+                  <div className="contact-main-info">
+                    <strong>{contact.name}</strong>
+                    <span>{contact.role}{contact.phone && ` · ${contact.phone}`}</span>
+                  </div>
+                  <div className="contact-total-paid">
+                    <small>Toplam Verilen</small>
+                    <strong className="negative">{currency.format(grandTotalPaid)}</strong>
+                  </div>
+                </div>
+
+                {/* Defter bazlı özet çubukları */}
+                <div className="contact-ledger-badges">
+                  {breakdown.map((b) => (
+                    <div key={b.ledgerId} className="contact-ledger-chip">
+                      <span className="chip-name">{b.ledgerName}:</span>
+                      <strong className={b.totalPaid > 0 ? "negative" : "muted-text"}>
+                        {currency.format(b.totalPaid)}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="contact-card-footer">
+                  <span className="view-detail-hint">Defter dökümü ve tarihleri gör →</span>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <section className="panel">
+          <Empty
+            icon={<Users size={21} />}
+            title="Henüz kişi eklenmemiş"
+            text="İlk müşterinizi veya ustanızı ekleyin."
+            action="İlk kişiyi ekle"
+            onClick={onAdd}
+          />
+        </section>
+      )}
+
+      {selectedContact && (
+        <ContactDetailModal
+          contact={selectedContact}
+          breakdown={getContactLedgerBreakdown(selectedContact.name)}
+          onClose={() => setSelectedContact(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function ContactDetailModal({
+  contact,
+  breakdown,
+  onClose,
+}: {
+  contact: Contact;
+  breakdown: ContactLedgerSummary[];
+  onClose: () => void;
+}) {
+  const grandTotal = breakdown.reduce((sum, b) => sum + b.totalPaid, 0);
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal contact-detail-modal">
+        <div className="modal-heading">
+          <div className="contact-modal-title">
+            <div className="contact-avatar-lg">{getInitials(contact.name)}</div>
+            <div>
+              <h2>{contact.name}</h2>
+              <p>{contact.role} {contact.phone ? `· ${contact.phone}` : ''}</p>
+            </div>
+          </div>
+          <button className="icon-button" aria-label="Kapat" onClick={onClose}>
+            <X size={19} />
+          </button>
+        </div>
+
+        <div className="contact-grand-total-banner">
+          <div>
+            <span>Tüm Defterlerden Toplam Verilen</span>
+            <strong className="negative">{currency.format(grandTotal)}</strong>
+          </div>
+          <small>{breakdown.filter((b) => b.totalPaid > 0).length} farklı defterden ödeme yapıldı</small>
+        </div>
+
+        <div className="contact-ledger-sections">
+          {breakdown.map((item) => (
+            <div key={item.ledgerId} className="contact-ledger-block">
+              <div className="contact-ledger-block-header">
+                <div>
+                  <h3>🏢 {item.ledgerName} Defteri</h3>
+                  <span>Toplam Ödenen: <strong className="negative">{currency.format(item.totalPaid)}</strong></span>
+                </div>
+                <span className="badge-count">{item.transactions.length} hareket</span>
+              </div>
+
+              {item.transactions.length > 0 ? (
+                <div className="contact-tx-list">
+                  {item.transactions.map((tx) => (
+                    <div key={tx.id} className="contact-tx-row">
+                      <div className="tx-date-badge">
+                        <span>{formatDateForForm(tx.date)}</span>
+                        <small>{kindLabels[tx.kind]}</small>
+                      </div>
+                      <div className="tx-desc-cell">
+                        <strong>{tx.description}</strong>
+                        {tx.kind === 'check' && (
+                          <span className="tx-check-info">
+                            Çek No: {tx.checkNumber || '—'} {tx.checkDate ? `· Vade: ${formatDateForForm(tx.checkDate)}` : ''}
+                          </span>
+                        )}
+                      </div>
+                      <div className="tx-amount-cell">
+                        <strong className="negative">
+                          {currency.format(tx.amount)}
+                        </strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="contact-no-tx">Bu defterden henüz bir ödeme veya kayıt yapılmamış.</div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="modal-actions">
+          <button type="button" className="primary-button" onClick={onClose}>
+            Tamam
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Projects({ projects, onAdd }: { projects: Project[]; onAdd: () => void }) { return <><PageTitle title="İşler ve projeler" description="Gelir ve giderlerinizi iş bazında izleyin." action={onAdd} actionLabel="Proje ekle" />{projects.length ? <div className="project-grid">{projects.map((project) => <article className="project-card" key={project.id}><div className="project-top"><span className="project-icon"><BriefcaseBusiness size={18} /></span><span className="status">{project.status}</span></div><h2>{project.name}</h2><p>{project.customer || 'Müşteri belirtilmedi'}</p><div className="project-footer"><span>Toplam maliyet</span><strong>{currency.format(0)}</strong></div></article>)}</div> : <section className="panel"><Empty icon={<BriefcaseBusiness size={21} />} title="Henüz proje yok" text="Bir iş ekleyerek maliyetleri proje bazında takip edin." action="İlk projeyi ekle" onClick={onAdd} /></section>}</> }
 function Reports({ metrics, transactions }: { metrics: { income: number; expense: number }; transactions: Transaction[] }) { const download = () => { const rows = ['Tarih,Tür,Tutar,Açıklama,Kategori,Kişi', ...transactions.map((item) => [item.date, kindLabels[item.kind], item.amount.toFixed(2), item.description, item.category, item.contact || ''].map((value) => `"${value.replaceAll('"', '""')}"`).join(','))]; const url = URL.createObjectURL(new Blob([`\ufeff${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = 'hesap-defteri-raporu.csv'; link.click(); URL.revokeObjectURL(url) }; return <><PageTitle title="Raporlar" description="Seçili defterin finansal görünümünü inceleyin." action={download} actionLabel="CSV indir" /><div className="report-summary"><div><span>Dönem geliri</span><strong className="positive">{currency.format(metrics.income)}</strong></div><div><span>Dönem gideri</span><strong className="negative">{currency.format(metrics.expense)}</strong></div><div><span>Net hareket</span><strong>{currency.format(metrics.income - metrics.expense)}</strong></div></div><section className="panel report-info"><FileDown size={20} /><div><h2>İşlem dökümü hazır</h2><p>Seçili defterin kayıtlarını Türkçe karakterleri koruyan CSV dosyası olarak indirebilirsiniz.</p></div></section></> }
 function PageTitle({ title, description, action, actionLabel }: { title: string; description: string; action: () => void; actionLabel: string }) { return <div className="page-heading"><div><h1>{title}</h1><p className="muted">{description}</p></div><div className="page-actions">{isSupabaseConfigured && <button className="secondary-button" onClick={() => void supabase?.auth.signOut()}>Çıkış yap</button>}<button className="primary-button" onClick={action}><Plus size={18} /> {actionLabel}</button></div></div> }
