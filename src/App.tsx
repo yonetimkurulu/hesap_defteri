@@ -32,7 +32,17 @@ import { BankConverter } from './components/BankConverter';
 import { ArrowDownLeft, ArrowUpRight, Banknote, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Download, FileDown, LayoutDashboard, FileSpreadsheet, Menu, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Users, WalletCards, X } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
-import { listUserCompanies, loadCompanyData } from './lib/supabase-data'
+import {
+  pullCloudData,
+  pushLocalDataToCloud,
+  cloudSaveTransaction,
+  cloudDeleteTransaction,
+  cloudSaveContact,
+  cloudDeleteContact,
+  cloudSaveLedger,
+  cloudSaveCompanyName,
+  subscribeToRealtime,
+} from './lib/supabaseSync'
 import './App.css'
 
 type Section = 'dashboard' | 'transactions' | 'contacts' | 'projects' | 'reports' | 'converter'
@@ -79,6 +89,16 @@ function parseDateInput(value: string) {
 function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
+  const [skipAuth, setSkipAuth] = useState(() => localStorage.getItem('hesap-defteri-skip-auth') === 'true')
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
+  const [companyName, setCompanyName] = useState<string>(() => {
+    const saved = localStorage.getItem(COMPANY_KEY)
+    if (saved) return saved
+    const initial = readLedgers()[0]?.name ?? 'Şirketim'
+    return initial
+  })
   const [ledgers, setLedgers] = useState<Ledger[]>(readLedgers)
   const [activeLedgerId, setActiveLedgerId] = useState(() => localStorage.getItem(ACTIVE_LEDGER_KEY) ?? readLedgers()[0]?.id ?? defaultLedger.id)
   const [state, setState] = useState<AppState>(() => readState(activeLedgerId))
@@ -106,7 +126,8 @@ function App() {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.2.9')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.3.0')
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   useEffect(() => {
     if (!window.hesapDefteriDesktop) return
@@ -140,39 +161,107 @@ function App() {
     window.hesapDefteriDesktop.quitAndInstall()
   }
 
+  const syncAll = async (targetSession = session) => {
+    if (!targetSession?.user) return
+    setSyncing(true)
+    setRemoteError('')
+    try {
+      const cloud = await pullCloudData(targetSession.user.id)
+      if (cloud && cloud.ledgers.length > 0) {
+        if (cloud.companyName) {
+          setCompanyName(cloud.companyName)
+          localStorage.setItem(COMPANY_KEY, cloud.companyName)
+        }
+        setLedgers(cloud.ledgers)
+        saveLedgers(cloud.ledgers)
+
+        for (const [lId, txs] of Object.entries(cloud.ledgerTransactions)) {
+          const curState = readState(lId)
+          const nextState: AppState = {
+            ...curState,
+            transactions: txs,
+            contacts: cloud.contacts,
+          }
+          localStorage.setItem(`${STORAGE_KEY}-${lId}`, JSON.stringify(nextState))
+        }
+
+        const nextActiveId = cloud.ledgers.some((l) => l.id === activeLedgerId)
+          ? activeLedgerId
+          : cloud.ledgers[0].id
+        setActiveLedgerId(nextActiveId)
+        localStorage.setItem(ACTIVE_LEDGER_KEY, nextActiveId)
+        setState(readState(nextActiveId))
+        setSyncMessage('Bulut senkronizasyonu güncel')
+      } else {
+        const localLedgers = readLedgers()
+        const res = await pushLocalDataToCloud(
+          targetSession.user.id,
+          companyName,
+          localLedgers,
+          state.contacts,
+          (lId) => readState(lId).transactions
+        )
+        if (res.count > 0) {
+          setSyncMessage(`Masaüstü kayıtlarınız buluta aktarıldı (${res.count} öğe)`)
+        } else {
+          setSyncMessage('Bulut bağlantısı hazır')
+        }
+      }
+    } catch (err: any) {
+      console.error('Senkronizasyon hatası:', err)
+      setRemoteError('Senkronizasyon hatası: ' + (err?.message || 'Bağlantı kurulamadı'))
+    } finally {
+      setSyncing(false)
+      setTimeout(() => setSyncMessage(null), 4000)
+    }
+  }
+
   useEffect(() => {
     if (!supabase) return
     let active = true
-    void supabase.auth.getSession().then(({ data }) => { if (active) { setSession(data.session); setAuthReady(true) } })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => { setSession(nextSession); setAuthReady(true) })
-    return () => { active = false; listener.subscription.unsubscribe() }
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active) {
+        setSession(data.session)
+        setAuthReady(true)
+        if (data.session) {
+          void syncAll(data.session)
+        }
+      }
+    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+      setAuthReady(true)
+      if (nextSession) {
+        void syncAll(nextSession)
+      }
+    })
+    return () => {
+      active = false
+      listener.subscription.unsubscribe()
+    }
   }, [])
-  useEffect(() => { const handleChange = () => { const id = localStorage.getItem(ACTIVE_LEDGER_KEY); if (id) { setActiveLedgerId(id); setState(readState(id)); setSection('dashboard') } }; window.addEventListener('hesap-defteri-ledger-change', handleChange); return () => window.removeEventListener('hesap-defteri-ledger-change', handleChange) }, [])
+
   useEffect(() => {
-    if (!isSupabaseConfigured || !session) return
-    let active = true
-    void listUserCompanies(session.user).then((companies) => {
-      if (!active || companies.length === 0) return
-      const remoteLedgers = companies.map((company) => ({ id: company.id, name: company.name, createdAt: company.created_at }))
-      const nextId = remoteLedgers.some((ledger) => ledger.id === activeLedgerId) ? activeLedgerId : remoteLedgers[0].id
-      setLedgers(remoteLedgers)
-      setActiveLedgerId(nextId)
-      localStorage.setItem(ACTIVE_LEDGER_KEY, nextId)
-    }).catch(() => { if (active) setRemoteError('Supabase şirket kayıtları okunamadı.') })
-    return () => { active = false }
-  }, [session, activeLedgerId])
+    const handleChange = () => {
+      const id = localStorage.getItem(ACTIVE_LEDGER_KEY)
+      if (id) {
+        setActiveLedgerId(id)
+        setState(readState(id))
+        setSection('dashboard')
+      }
+    }
+    window.addEventListener('hesap-defteri-ledger-change', handleChange)
+    return () => window.removeEventListener('hesap-defteri-ledger-change', handleChange)
+  }, [])
+
   useEffect(() => {
-    if (!isSupabaseConfigured || !session || !activeLedgerId || activeLedgerId === defaultLedger.id) return
-    let active = true
-    void loadCompanyData(activeLedgerId).then((remote) => {
-      if (!active) return
-      setState({
-        contacts: remote.contacts.map((contact) => ({ id: contact.id, name: contact.name, role: contact.relationship, phone: contact.phone ?? '', balance: 0 })),
-        projects: remote.projects.map((project) => ({ id: project.id, name: project.name, customer: '', status: project.status })),
-        transactions: remote.transactions.map((transaction) => ({ id: transaction.id, date: transaction.transaction_date, kind: transaction.kind, amount: Number(transaction.amount), description: transaction.description, category: 'Diğer', contact: transaction.contacts?.[0]?.name ?? '' })),
-      })
-    }).catch(() => { if (active) setRemoteError('Seçili defterin kayıtları okunamadı.') })
-    return () => { active = false }
+    if (!session?.user) return
+    const unsubscribe = subscribeToRealtime(session.user.id, () => {
+      void syncAll(session)
+    })
+    return () => {
+      unsubscribe()
+    }
   }, [session, activeLedgerId])
 
   const activeLedger = ledgers.find((ledger) => ledger.id === activeLedgerId) ?? defaultLedger
@@ -191,6 +280,11 @@ function App() {
       transactions: [...newTx, ...state.transactions],
     };
     persist(nextState);
+    if (session?.user) {
+      for (const t of newTx) {
+        void cloudSaveTransaction(session.user.id, activeLedgerId, t);
+      }
+    }
   };
   const periodTransactions = useMemo(() => state.transactions.filter((item) => period === 'today' ? item.date === today : period === 'month' ? item.date.startsWith(selectedMonth) : period === 'custom' ? item.date >= customFrom && item.date <= customTo : true), [state.transactions, period, selectedMonth, customFrom, customTo])
   const metrics = useMemo(() => {
@@ -205,16 +299,18 @@ function App() {
     return { income: sum('income'), expense: sum('expense'), payables: Math.max(sum('payable') - sum('payment'), 0), receivables: Math.max(sum('receivable') - sum('collection'), 0), topPayments, checkTotal, upcomingChecks, overdueChecks, overdueTotal }
   }, [periodTransactions, state.transactions])
   if (isSupabaseConfigured && !authReady) return <LoadingScreen />
-  if (isSupabaseConfigured && !session) return <AuthScreen />
+  if (isSupabaseConfigured && !session && !skipAuth) {
+    return (
+      <AuthScreen
+        onSkip={() => {
+          localStorage.setItem('hesap-defteri-skip-auth', 'true')
+          setSkipAuth(true)
+        }}
+      />
+    )
+  }
   
-  // Şirket Adı (Tek ve Defterlerden bağımsız)
-  const [companyName, setCompanyName] = useState<string>(() => {
-    const saved = localStorage.getItem(COMPANY_KEY);
-    if (saved) return saved;
-    // Eğer henüz kaydedilmemişse ilk defterin adını başlangıç şirket adı yap
-    const initial = readLedgers()[0]?.name ?? 'Şirketim';
-    return initial;
-  });
+
 
   const updateCompanyName = (newName: string) => {
     const trimmed = newName.trim();
@@ -222,6 +318,7 @@ function App() {
     setCompanyName(trimmed);
     localStorage.setItem(COMPANY_KEY, trimmed);
     setRenameModalOpen(false);
+    if (session?.user) void cloudSaveCompanyName(session.user.id, trimmed);
   };
 
   const completeOnboarding = (compName: string) => {
@@ -235,6 +332,10 @@ function App() {
     localStorage.setItem(ACTIVE_LEDGER_KEY, initialLedger.id);
     localStorage.setItem(ONBOARDING_KEY, 'true');
     setShowOnboarding(false);
+    if (session?.user) {
+      void cloudSaveCompanyName(session.user.id, trimmedComp);
+      void cloudSaveLedger(session.user.id, initialLedger);
+    }
   }
 
   const addRecord = (event: React.FormEvent<HTMLFormElement>, type: 'transaction' | 'contact' | 'project') => {
@@ -246,11 +347,19 @@ function App() {
       if (record.amount > 0 && record.description) {
         const hasContact = state.contacts.some((contact) => contact.name.toLocaleLowerCase('tr') === contactName.toLocaleLowerCase('tr'))
         const transactions = editingTransaction ? state.transactions.map((item) => item.id === editingTransaction.id ? record : item) : [record, ...state.transactions]
-        persist({ ...state, transactions, contacts: contactName && !hasContact ? [{ id: crypto.randomUUID(), name: contactName, role: 'Diğer', phone: '', balance: 0 }, ...state.contacts] : state.contacts })
+        const newContact = contactName && !hasContact ? { id: crypto.randomUUID(), name: contactName, role: 'Diğer', phone: '', balance: 0 } : null
+        persist({ ...state, transactions, contacts: newContact ? [newContact, ...state.contacts] : state.contacts })
+        if (session?.user) {
+          void cloudSaveTransaction(session.user.id, activeLedgerId, record)
+          if (newContact) void cloudSaveContact(session.user.id, newContact)
+        }
       }
     } else if (type === 'contact') {
       const record: Contact = { id: crypto.randomUUID(), name: String(form.get('name')), role: String(form.get('role')), phone: String(form.get('phone') || ''), balance: 0 }
-      if (record.name) persist({ ...state, contacts: [record, ...state.contacts] })
+      if (record.name) {
+        persist({ ...state, contacts: [record, ...state.contacts] })
+        if (session?.user) void cloudSaveContact(session.user.id, record)
+      }
     } else {
       const record: Project = { id: crypto.randomUUID(), name: String(form.get('name')), customer: String(form.get('customer') || ''), status: 'Devam ediyor' }
       if (record.name) persist({ ...state, projects: [record, ...state.projects] })
@@ -258,7 +367,10 @@ function App() {
     setEditingTransaction(null)
     setModal(null)
   }
-  const deleteTransaction = (id: string) => { persist({ ...state, transactions: state.transactions.filter((item) => item.id !== id) }) }
+  const deleteTransaction = (id: string) => {
+    persist({ ...state, transactions: state.transactions.filter((item) => item.id !== id) })
+    if (session?.user) void cloudDeleteTransaction(session.user.id, id)
+  }
 
   const updateContact = (updated: Contact) => {
     const oldName = state.contacts.find((c) => c.id === updated.id)?.name;
@@ -273,13 +385,13 @@ function App() {
       );
     }
     persist({ ...state, contacts: newContacts, transactions: newTransactions });
+    if (session?.user) void cloudSaveContact(session.user.id, updated);
   };
 
   const deleteContact = (contactId: string) => {
     persist({ ...state, contacts: state.contacts.filter((c) => c.id !== contactId) });
+    if (session?.user) void cloudDeleteContact(session.user.id, contactId);
   };
-
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const saveTxToLedger = (ledgerId: string, updatedTx: Transaction) => {
     if (ledgerId === activeLedgerId) {
@@ -296,6 +408,7 @@ function App() {
       localStorage.setItem(`${STORAGE_KEY}-${ledgerId}`, JSON.stringify(next));
       setRefreshTrigger((k) => k + 1);
     }
+    if (session?.user) void cloudSaveTransaction(session.user.id, ledgerId, updatedTx);
   };
 
   const deleteTxFromLedger = (ledgerId: string, txId: string) => {
@@ -313,15 +426,59 @@ function App() {
       localStorage.setItem(`${STORAGE_KEY}-${ledgerId}`, JSON.stringify(next));
       setRefreshTrigger((k) => k + 1);
     }
+    if (session?.user) void cloudDeleteTransaction(session.user.id, txId);
   };
   const visibleTransactions = state.transactions.filter((item) => `${item.description} ${item.category} ${item.contact || ''}`.toLocaleLowerCase('tr').includes(query.toLocaleLowerCase('tr')))
 
   const isDesktop = typeof window !== 'undefined' && Boolean(window.hesapDefteriDesktop);
 
-  return <div className={`app-shell ${isDesktop ? 'is-desktop' : ''}`}><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} /><nav>{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMobileNav(false) }}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-bottom"><UpdateWidget updateState={updateState} installedVersion={installedVersion} onCheck={checkForUpdate} onDownload={startDownload} onInstall={installAndRestart} />
+  return <div className={`app-shell ${isDesktop ? 'is-desktop' : ''}`}><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} onSaveLedger={(l) => { if (session?.user) void cloudSaveLedger(session.user.id, l); }} /><nav>{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMobileNav(false) }}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-bottom"><UpdateWidget updateState={updateState} installedVersion={installedVersion} onCheck={checkForUpdate} onDownload={startDownload} onInstall={installAndRestart} />
 <a className="download-link" href={desktopDownloadUrl} target="_blank" rel="noreferrer"><Download size={18} />Web / Sürümler</a>
 <button type="button" className="profile profile-clickable" onClick={() => setRenameModalOpen(true)} title="Şirket adını düzenle"><div className="avatar">{getInitials(companyName)}</div><div><strong>{companyName}</strong><span>Şirket Profilini Düzenle ✏️</span></div></button>
-</div></aside>{mobileNav && <button className="backdrop" aria-label="Menüyü kapat" onClick={() => setMobileNav(false)} />}<main className="main-content"><header className="topbar"><button className="icon-button menu-button" aria-label="Menüyü aç" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="breadcrumb"><span>{companyName}</span><b>/</b><span>{activeLedger.name} Defteri</span><b>/</b><strong>{navItems.find((item) => item.id === section)?.label}</strong></div><div className="top-actions"><span className="online"><i />{remoteError ? 'Bağlantı hatası' : isSupabaseConfigured ? 'Güvenli bağlantı' : 'Yerel çalışma modu'}</span><button type="button" className="icon-button help-icon-btn" aria-label="Yardım Rehberi" title="Kullanım Rehberi" onClick={() => setHelpOpen(true)}><CircleHelp size={20} /></button><button type="button" className="mini-avatar-btn" onClick={() => setRenameModalOpen(true)} title={`${companyName} - Şirket Adını Düzenle`}><div className="mini-avatar">{getInitials(companyName)}</div></button></div></header>{updateState.status !== 'idle' && updateState.status !== 'not-available' && (
+</div></aside>{mobileNav && <button className="backdrop" aria-label="Menüyü kapat" onClick={() => setMobileNav(false)} />}<main className="main-content"><header className="topbar"><button className="icon-button menu-button" aria-label="Menüyü aç" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="breadcrumb"><span>{companyName}</span><b>/</b><span>{activeLedger.name} Defteri</span><b>/</b><strong>{navItems.find((item) => item.id === section)?.label}</strong></div><div className="top-actions">
+  <div className="cloud-status-group">
+    {session?.user ? (
+      <div className="cloud-pill online" title={`Buluta bağlı: ${session.user.email}`}>
+        <span className="cloud-dot online" />
+        <span className="cloud-label">{session.user.email}</span>
+        <button
+          type="button"
+          className="cloud-action-icon"
+          onClick={() => void syncAll()}
+          disabled={syncing}
+          title="Şimdi senkronize et"
+        >
+          <RefreshCw size={12} className={syncing ? 'spin' : ''} />
+        </button>
+        <button
+          type="button"
+          className="cloud-logout-link"
+          onClick={() => void supabase?.auth.signOut()}
+          title="Çıkış yap"
+        >
+          Çıkış
+        </button>
+      </div>
+    ) : (
+      <button
+        type="button"
+        className="cloud-pill local"
+        onClick={() => setAuthModalOpen(true)}
+        title="Telefondan erişim ve bulut yedekleme için giriş yapın"
+      >
+        <span className="cloud-dot local" />
+        <span className="cloud-label">Yerel Mod (Buluta Bağlan)</span>
+      </button>
+    )}
+  </div>
+  {remoteError ? (
+    <span className="sync-banner-text error" title={remoteError}>{remoteError}</span>
+  ) : syncMessage ? (
+    <span className="sync-banner-text">{syncMessage}</span>
+  ) : null}
+  <button type="button" className="icon-button help-icon-btn" aria-label="Yardım Rehberi" title="Kullanım Rehberi" onClick={() => setHelpOpen(true)}><CircleHelp size={20} /></button>
+  <button type="button" className="mini-avatar-btn" onClick={() => setRenameModalOpen(true)} title={`${companyName} - Şirket Adını Düzenle`}><div className="mini-avatar">{getInitials(companyName)}</div></button>
+</div></header>{updateState.status !== 'idle' && updateState.status !== 'not-available' && (
   <div className={"update-banner update-banner-" + updateState.status}>
 
     {updateState.status === 'checking' && <span><RefreshCw size={15} className="spin" /> Güncellemeler denetleniyor...</span>}
@@ -361,10 +518,25 @@ function App() {
     onClose={() => setRenameModalOpen(false)}
   />
 )}
+{authModalOpen && (
+  <div className="modal-backdrop">
+    <div className="modal auth-modal-wrapper">
+      <button
+        type="button"
+        className="icon-button modal-close-btn"
+        aria-label="Kapat"
+        onClick={() => setAuthModalOpen(false)}
+      >
+        <X size={19} />
+      </button>
+      <AuthScreen onSkip={() => setAuthModalOpen(false)} isModal />
+    </div>
+  </div>
+)}
 </div>
 }
 
-function LedgerSwitcher({ ledgers, activeLedgerId, setLedgers }: { ledgers: Ledger[]; activeLedgerId: string; setLedgers: (ledgers: Ledger[]) => void }) {
+function LedgerSwitcher({ ledgers, activeLedgerId, setLedgers, onSaveLedger }: { ledgers: Ledger[]; activeLedgerId: string; setLedgers: (ledgers: Ledger[]) => void; onSaveLedger?: (ledger: Ledger) => void }) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -381,6 +553,7 @@ function LedgerSwitcher({ ledgers, activeLedgerId, setLedgers }: { ledgers: Ledg
     const next = [...ledgers, ledger];
     setLedgers(next);
     saveLedgers(next);
+    onSaveLedger?.(ledger);
     setName('');
     setCreating(false);
     setOpen(false);
@@ -391,9 +564,11 @@ function LedgerSwitcher({ ledgers, activeLedgerId, setLedgers }: { ledgers: Ledg
     e.preventDefault();
     const trimmed = editName.trim();
     if (!trimmed) return;
-    const next = ledgers.map((l) => (l.id === id ? { ...l, name: trimmed } : l));
+    const updatedLedger = { ...(ledgers.find((l) => l.id === id) || { id, createdAt: today }), name: trimmed } as Ledger;
+    const next = ledgers.map((l) => (l.id === id ? updatedLedger : l));
     setLedgers(next);
     saveLedgers(next);
+    onSaveLedger?.(updatedLedger);
     setEditingId(null);
   };
 
@@ -469,8 +644,155 @@ function LedgerSwitcher({ ledgers, activeLedgerId, setLedgers }: { ledgers: Ledg
   );
 }
 function LoadingScreen() { return <div className="auth-page"><div className="auth-card loading-card"><div className="brand-mark"><Banknote size={19} /></div><h1>Hesap Defteri</h1><p>Oturumunuz kontrol ediliyor...</p></div></div> }
-function AuthScreen() { const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login'); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [companyName, setCompanyName] = useState(''); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const submit = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); setLoading(true); setMessage(''); setError(''); if (!supabase) return; const result = mode === 'login' ? await supabase.auth.signInWithPassword({ email, password }) : mode === 'register' ? await supabase.auth.signUp({ email, password, options: { data: { company_name: companyName } } }) : await supabase.auth.resetPasswordForEmail(email); setLoading(false); if (result.error) { setError(authError(result.error.message)); return } setMessage(mode === 'register' ? 'Kayıt başarılı. E-posta doğrulaması açıksa gelen kutunuzu kontrol edin.' : mode === 'reset' ? 'Şifre yenileme bağlantısı e-posta adresinize gönderildi.' : '') }; return <div className="auth-page"><div className="auth-card"><div className="auth-brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><h1>{mode === 'login' ? 'Tekrar hoş geldiniz' : mode === 'register' ? 'İşletmenizi oluşturun' : 'Şifrenizi yenileyin'}</h1><p className="auth-lead">Hesaplarınıza güvenle erişin.</p><form className="auth-form" onSubmit={submit}>{mode === 'register' && <label>İşletme adı<input value={companyName} onChange={(event) => setCompanyName(event.target.value)} required placeholder="Örn. Ninehatun İnşaat" /></label>}<label>E-posta<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="ornek@firma.com" /></label>{mode !== 'reset' && <label>Şifre<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} placeholder="En az 8 karakter" /></label>}{error && <p className="auth-error">{error}</p>}{message && <p className="auth-message">{message}</p>}<button className="primary-button auth-submit" disabled={loading}>{loading ? 'İşleniyor...' : mode === 'login' ? 'Giriş yap' : mode === 'register' ? 'Hesap oluştur' : 'Bağlantı gönder'}</button></form>{mode === 'login' && <button className="auth-link" onClick={() => setMode('reset')}>Şifremi unuttum</button>}<div className="auth-switch"><button onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Yeni hesap oluştur' : 'Giriş ekranına dön'}</button></div></div></div> }
-function authError(message: string) { if (message.includes('Invalid login')) return 'E-posta veya şifre hatalı.'; if (message.includes('already registered')) return 'Bu e-posta adresi zaten kayıtlı.'; return 'İşlem tamamlanamadı. Bilgilerinizi kontrol edip tekrar deneyin.' }
+function AuthScreen({ onSkip, isModal }: { onSkip?: () => void; isModal?: boolean }) {
+  const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+    setError('');
+    if (!supabase) return;
+
+    try {
+      if (mode === 'login') {
+        const result = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (result.error) throw result.error;
+        setMessage('Giriş başarılı!');
+        if (onSkip) onSkip();
+      } else if (mode === 'register') {
+        const result = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { company_name: companyName.trim() },
+          },
+        });
+        if (result.error) throw result.error;
+        if (result.data.session) {
+          setMessage('Kayıt başarılı! Giriş yapıldı.');
+          if (onSkip) onSkip();
+        } else {
+          setMessage('Kayıt oluşturuldu! E-posta adresinize gelen onay linkine tıkladıktan sonra giriş yapabilirsiniz.');
+          setMode('login');
+        }
+      } else {
+        const result = await supabase.auth.resetPasswordForEmail(email.trim());
+        if (result.error) throw result.error;
+        setMessage('Şifre yenileme bağlantısı e-posta adresinize gönderildi.');
+      }
+    } catch (err: any) {
+      setError(authError(err.message || 'Bir hata oluştu'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={isModal ? "auth-modal-content" : "auth-page"}>
+      <div className="auth-card">
+        <div className="auth-brand">
+          <div className="brand-mark"><Banknote size={19} /></div>
+          <div>
+            <strong>Hesap Defteri</strong>
+            <span>{mode === 'login' ? 'Bulut Girişi & Eşitleme' : mode === 'register' ? 'Bulut Hesabı Aç' : 'Şifre Sıfırlama'}</span>
+          </div>
+        </div>
+        <h1>{mode === 'login' ? 'Tekrar hoş geldiniz' : mode === 'register' ? 'İşletmenizi oluşturun' : 'Şifrenizi yenileyin'}</h1>
+        <p className="auth-lead">
+          {mode === 'login'
+            ? 'Telefondan ve masaüstünden aynı deftere anında erişin.'
+            : mode === 'register'
+            ? 'Hesap açarak defterlerinizi buluta yedekleyin ve telefonunuzdan takip edin.'
+            : 'E-posta adresinize sıfırlama bağlantısı gönderelim.'}
+        </p>
+
+        <form className="auth-form" onSubmit={submit}>
+          {mode === 'register' && (
+            <label>
+              İşletme adı
+              <input
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                required
+                placeholder="Örn. Ninehatun İnşaat"
+              />
+            </label>
+          )}
+          <label>
+            E-posta
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              placeholder="ornek@firma.com"
+            />
+          </label>
+          {mode !== 'reset' && (
+            <label>
+              Şifre
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                minLength={6}
+                placeholder="En az 6 karakter"
+              />
+            </label>
+          )}
+          {error && <p className="auth-error">{error}</p>}
+          {message && <p className="auth-message">{message}</p>}
+          <button className="primary-button auth-submit" disabled={loading}>
+            {loading ? 'İşleniyor...' : mode === 'login' ? 'Giriş yap ve Eşitle' : mode === 'register' ? 'Hesap oluştur' : 'Bağlantı gönder'}
+          </button>
+        </form>
+
+        {mode === 'login' && (
+          <button type="button" className="auth-link" onClick={() => setMode('reset')}>
+            Şifremi unuttum
+          </button>
+        )}
+
+        <div className="auth-switch">
+          <button type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+            {mode === 'login' ? 'Yeni hesap oluştur' : 'Giriş ekranına dön'}
+          </button>
+        </div>
+
+        {onSkip && (
+          <div className="auth-skip-row">
+            <button type="button" className="auth-skip-btn" onClick={onSkip}>
+              {isModal ? 'Pencereyi kapat' : 'Şimdilik giriş yapmadan (Yerel Modda) devam et →'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+function authError(message: string) {
+  if (message.includes('Invalid login credentials') || message.includes('invalid_credentials')) {
+    return 'E-posta veya şifre hatalı. Lütfen kontrol edip tekrar deneyin.';
+  }
+  if (message.includes('already registered') || message.includes('already exists')) {
+    return 'Bu e-posta adresiyle kayıtlı bir hesap zaten var. Giriş yapabilirsiniz.';
+  }
+  if (message.includes('Email not confirmed')) {
+    return 'E-posta adresiniz henüz doğrulanmamış. Gelen kutunuzdaki onay bağlantısına tıklayın.';
+  }
+  if (message.includes('Password should be at least')) {
+    return 'Şifreniz en az 6 karakter olmalıdır.';
+  }
+  return 'İşlem tamamlanamadı: ' + message;
+}
 
 function DateField({ defaultValue, name = 'date' }: { defaultValue: string; name?: string }) {
   const initialIso = defaultValue.includes('.') ? parseDateInput(defaultValue) : defaultValue;
@@ -1095,7 +1417,7 @@ function ContactDetailModal({
 
 function Projects({ projects, onAdd }: { projects: Project[]; onAdd: () => void }) { return <><PageTitle title="İşler ve projeler" description="Gelir ve giderlerinizi iş bazında izleyin." action={onAdd} actionLabel="Proje ekle" />{projects.length ? <div className="project-grid">{projects.map((project) => <article className="project-card" key={project.id}><div className="project-top"><span className="project-icon"><BriefcaseBusiness size={18} /></span><span className="status">{project.status}</span></div><h2>{project.name}</h2><p>{project.customer || 'Müşteri belirtilmedi'}</p><div className="project-footer"><span>Toplam maliyet</span><strong>{currency.format(0)}</strong></div></article>)}</div> : <section className="panel"><Empty icon={<BriefcaseBusiness size={21} />} title="Henüz proje yok" text="Bir iş ekleyerek maliyetleri proje bazında takip edin." action="İlk projeyi ekle" onClick={onAdd} /></section>}</> }
 function Reports({ metrics, transactions }: { metrics: { income: number; expense: number }; transactions: Transaction[] }) { const download = () => { const rows = ['Tarih,Tür,Tutar,Açıklama,Kategori,Kişi', ...transactions.map((item) => [item.date, kindLabels[item.kind], item.amount.toFixed(2), item.description, item.category, item.contact || ''].map((value) => `"${value.replaceAll('"', '""')}"`).join(','))]; const url = URL.createObjectURL(new Blob([`\ufeff${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = 'hesap-defteri-raporu.csv'; link.click(); URL.revokeObjectURL(url) }; return <><PageTitle title="Raporlar" description="Seçili defterin finansal görünümünü inceleyin." action={download} actionLabel="CSV indir" /><div className="report-summary"><div><span>Dönem geliri</span><strong className="positive">{currency.format(metrics.income)}</strong></div><div><span>Dönem gideri</span><strong className="negative">{currency.format(metrics.expense)}</strong></div><div><span>Net hareket</span><strong>{currency.format(metrics.income - metrics.expense)}</strong></div></div><section className="panel report-info"><FileDown size={20} /><div><h2>İşlem dökümü hazır</h2><p>Seçili defterin kayıtlarını Türkçe karakterleri koruyan CSV dosyası olarak indirebilirsiniz.</p></div></section></> }
-function PageTitle({ title, description, action, actionLabel }: { title: string; description: string; action: () => void; actionLabel: string }) { return <div className="page-heading"><div><h1>{title}</h1><p className="muted">{description}</p></div><div className="page-actions">{isSupabaseConfigured && <button className="secondary-button" onClick={() => void supabase?.auth.signOut()}>Çıkış yap</button>}<button className="primary-button" onClick={action}><Plus size={18} /> {actionLabel}</button></div></div> }
+function PageTitle({ title, description, action, actionLabel }: { title: string; description: string; action: () => void; actionLabel: string }) { return <div className="page-heading"><div><h1>{title}</h1><p className="muted">{description}</p></div><div className="page-actions"><button className="primary-button" onClick={action}><Plus size={18} /> {actionLabel}</button></div></div> }
 function Empty({ icon, title, text, action, onClick }: { icon: React.ReactNode; title: string; text: string; action: string; onClick: () => void }) { return <div className="empty-state"><div className="empty-icon">{icon}</div><h2>{title}</h2><p>{text}</p><button className="secondary-button" onClick={onClick}><Plus size={16} /> {action}</button></div> }
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) { return <div className="modal-backdrop"><div className="modal"><div className="modal-heading"><div><h2>{title}</h2><p>Bilgileri eksiksiz girin.</p></div><button className="icon-button" aria-label="Kapat" onClick={onClose}><X size={19} /></button></div>{children}</div></div> }
 function ModalActions({ onClose, submitLabel }: { onClose: () => void; submitLabel: string }) { return <div className="modal-actions wide"><button type="button" className="secondary-button" onClick={onClose}>Vazgeç</button><button type="submit" className="primary-button">{submitLabel}</button></div> }

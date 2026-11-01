@@ -54,7 +54,7 @@ export function parseTrAmount(str: string): number {
  * GG.AA.YYYY formatındaki tarihi YYYY-MM-DD formatına çevirir.
  */
 export function normalizeDate(dateStr: string): string {
-  const match = dateStr.match(/^(\d{2})[./\-](\d{2})[./\-](\d{4})/);
+  const match = dateStr.match(/^(\d{2})[./-](\d{2})[./-](\d{4})/);
   if (!match) return dateStr;
   return `${match[3]}-${match[2]}-${match[1]}`;
 }
@@ -132,8 +132,8 @@ export async function parseBankStatementPdf(file: File): Promise<StatementParseR
 
   // Satırlardan işlem hareketlerini ayıklama
   const transactions: ParsedBankRow[] = [];
-  const dateRegex = /\b(\d{2}[./\-]\d{2}[./\-]\d{4})\b/;
-  const amountRegex = /([+\-]?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))/;
+  const dateRegex = /\b(\d{2}[./-]\d{2}[./-]\d{4})\b/;
+  const amountRegex = /([+-]?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))/;
 
   let currentRow: Partial<ParsedBankRow> | null = null;
 
