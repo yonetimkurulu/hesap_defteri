@@ -28,7 +28,7 @@ type UpdateState = {
   message?: string
 }
 import React, { useEffect, useMemo, useState, useRef } from 'react'
-import { ArrowDownLeft, ArrowUpRight, Banknote, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, CircleHelp, Clock, Download, FileDown, LayoutDashboard, Menu, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Users, WalletCards, X } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Banknote, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Download, FileDown, LayoutDashboard, Menu, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Users, WalletCards, X } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { listUserCompanies, loadCompanyData } from './lib/supabase-data'
@@ -53,6 +53,7 @@ const LOCAL_SCHEMA_VERSION = '1'
 const today = new Date().toISOString().slice(0, 10)
 const currency = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' })
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })
+const monthFormatter = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' })
 const kindLabels: Record<TransactionKind, string> = { income: 'Gelir', expense: 'Gider', payable: 'Borç', receivable: 'Alacak', payment: 'Ödeme', collection: 'Tahsilat', check: 'Çek' }
 const navItems = [{ id: 'dashboard' as Section, label: 'Genel Bakış', icon: LayoutDashboard }, { id: 'transactions' as Section, label: 'İşlemler', icon: WalletCards }, { id: 'contacts' as Section, label: 'Kişiler', icon: Users }, { id: 'reports' as Section, label: 'Raporlar', icon: FileDown }]
 const blankState: AppState = { transactions: [], contacts: [], projects: [] }
@@ -82,6 +83,14 @@ function App() {
   const [state, setState] = useState<AppState>(() => readState(activeLedgerId))
   const [section, setSection] = useState<Section>('dashboard')
   const [period, setPeriod] = useState<Period>('month')
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => today.slice(0, 7))
+  const changeMonth = (delta: number) => {
+    const [yearStr, monthStr] = selectedMonth.split('-');
+    const d = new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1 + delta, 1);
+    const nextY = d.getFullYear();
+    const nextM = String(d.getMonth() + 1).padStart(2, '0');
+    setSelectedMonth(`${nextY}-${nextM}`);
+  }
   const [customFrom, setCustomFrom] = useState(`${today.slice(0, 8)}01`)
   const [customTo, setCustomTo] = useState(today)
   const [modal, setModal] = useState<'transaction' | 'contact' | 'project' | null>(null)
@@ -96,7 +105,7 @@ function App() {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.2.7')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.2.8')
 
   useEffect(() => {
     if (!window.hesapDefteriDesktop) return
@@ -167,7 +176,7 @@ function App() {
 
   const activeLedger = ledgers.find((ledger) => ledger.id === activeLedgerId) ?? defaultLedger
   const persist = (next: AppState) => { setState(next); localStorage.setItem(`${STORAGE_KEY}-${activeLedgerId}`, JSON.stringify(next)) }
-  const periodTransactions = useMemo(() => state.transactions.filter((item) => period === 'today' ? item.date === today : period === 'month' ? item.date.startsWith(today.slice(0, 7)) : period === 'custom' ? item.date >= customFrom && item.date <= customTo : true), [state.transactions, period, customFrom, customTo])
+  const periodTransactions = useMemo(() => state.transactions.filter((item) => period === 'today' ? item.date === today : period === 'month' ? item.date.startsWith(selectedMonth) : period === 'custom' ? item.date >= customFrom && item.date <= customTo : true), [state.transactions, period, selectedMonth, customFrom, customTo])
   const metrics = useMemo(() => {
     const sum = (kind: TransactionKind) => periodTransactions.filter((item) => item.kind === kind).reduce((total, item) => total + item.amount, 0)
     const grouped = periodTransactions.filter((item) => (item.kind === 'payment' || item.kind === 'expense') && item.contact).reduce<Record<string, { name: string; amount: number }>>((totals, item) => { const name = item.contact!.trim(); const key = name.toLocaleLowerCase('tr'); const displayName = name.charAt(0).toLocaleUpperCase('tr') + name.slice(1); totals[key] = totals[key] ?? { name: displayName, amount: 0 }; totals[key].amount += item.amount; return totals }, {})
@@ -326,7 +335,7 @@ function App() {
     )}
   </div>
 )}
-<div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} ledgers={ledgers} refreshKey={refreshTrigger} onAdd={() => setModal('contact')} onUpdateContact={updateContact} onDeleteContact={deleteContact} onSaveTx={saveTxToLedger} onDeleteTx={deleteTxFromLedger} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}
+<div className="page-wrap">{section === 'dashboard' && <Dashboard activeLedger={activeLedger} metrics={metrics} state={state} period={period} setPeriod={setPeriod} selectedMonth={selectedMonth} onChangeMonth={changeMonth} onSelectMonth={setSelectedMonth} periodTransactions={periodTransactions} customFrom={customFrom} customTo={customTo} setCustomFrom={setCustomFrom} setCustomTo={setCustomTo} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(tx) => { setEditingTransaction(tx); setModal('transaction') }} onDelete={deleteTransaction} onNavigate={setSection} />}{section === 'transactions' && <Transactions transactions={visibleTransactions} query={query} setQuery={setQuery} onAdd={() => { setEditingTransaction(null); setTransactionKind('expense'); setModal('transaction') }} onEdit={(transaction) => { setEditingTransaction(transaction); setModal('transaction') }} onDelete={deleteTransaction} />}{section === 'contacts' && <Contacts contacts={state.contacts} ledgers={ledgers} refreshKey={refreshTrigger} onAdd={() => setModal('contact')} onUpdateContact={updateContact} onDeleteContact={deleteContact} onSaveTx={saveTxToLedger} onDeleteTx={deleteTxFromLedger} />}{section === 'projects' && <Projects projects={state.projects} onAdd={() => setModal('project')} />}{section === 'reports' && <Reports metrics={metrics} transactions={state.transactions} />}</div></main>{modal === 'transaction' && <Modal title={editingTransaction ? 'Finansal kaydı düzenle' : 'Yeni finansal kayıt'} onClose={() => { setEditingTransaction(null); setModal(null) }}><form className="form-grid" onSubmit={(event) => addRecord(event, 'transaction')}><label>Kayıt türü<select name="kind" value={transactionKind} onChange={(event) => setTransactionKind(event.target.value as TransactionKind)}>{Object.entries(kindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Tutar (TL)<input name="amount" type="text" inputMode="decimal" defaultValue={editingTransaction ? new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(editingTransaction.amount) : ''} required placeholder="100.000,00" /></label><label>Tarih<DateField defaultValue={editingTransaction?.date ?? today} /></label>{transactionKind === 'check' && <><label>Çek numarası<input name="checkNumber" defaultValue={editingTransaction?.checkNumber ?? ''} placeholder="Örn. 123456" /></label><label>Vade / ödeme tarihi<DateField name="checkDate" defaultValue={editingTransaction?.checkDate ?? today} /></label></>}<label className="wide">Açıklama<input name="description" defaultValue={editingTransaction?.description ?? ''} required placeholder="şlem açıklaması" /></label><label className="wide">Kişi / firma<ContactField contacts={state.contacts} defaultValue={editingTransaction?.contact ?? ''} /></label><ModalActions onClose={() => { setEditingTransaction(null); setModal(null) }} submitLabel={editingTransaction ? 'Değişiklikleri kaydet' : 'Kaydı oluştur'} /></form></Modal>}{modal === 'contact' && <Modal title="Yeni kişi veya firma" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'contact')}><label className="wide">Ad / firma adı<input name="name" required placeholder="Örn. �?enol Usta" /></label><label>İlişki türü<select name="role"><option>Müşteri</option><option>Tedarikçi</option><option>Çalışan</option><option>Taşeron</option><option>Diğer</option></select></label><label>Telefon<input name="phone" placeholder="05__ ___ __ __" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Kişiyi ekle" /></form></Modal>}{modal === 'project' && <Modal title="Yeni iş / proje" onClose={() => setModal(null)}><form className="form-grid" onSubmit={(event) => addRecord(event, 'project')}><label className="wide">Proje adı<input name="name" required placeholder="Örn. Banyo tadilatı" /></label><label className="wide">Müşteri<input name="customer" placeholder="Müşteri adı (opsiyonel)" /></label><ModalActions onClose={() => setModal(null)} submitLabel="Projeyi ekle" /></form></Modal>}
 {showOnboarding && <OnboardingModal onComplete={completeOnboarding} />}
 {helpOpen && <HelpGuideModal onClose={() => setHelpOpen(false)} />}
 {renameModalOpen && (
@@ -514,7 +523,243 @@ function DateField({ defaultValue, name = 'date' }: { defaultValue: string; name
 }
 function ContactField({ contacts, defaultValue }: { contacts: Contact[]; defaultValue: string }) { const [value, setValue] = useState(defaultValue); const [focused, setFocused] = useState(false); const suggestions = contacts.filter((contact) => contact.name.toLocaleLowerCase('tr').includes(value.toLocaleLowerCase('tr'))).slice(0, 5); return <div className="contact-field"><input name="contact" value={value} onFocus={() => setFocused(true)} onChange={(event) => { setValue(event.target.value); setFocused(true) }} onBlur={() => setTimeout(() => setFocused(false), 120)} placeholder="Kişi veya firma ara..." autoComplete="off" />{focused && suggestions.length > 0 && <div className="contact-suggestions">{suggestions.map((contact) => <button type="button" key={contact.id} onMouseDown={() => { setValue(contact.name); setFocused(false) }}><strong>{contact.name}</strong><span>{contact.role}</span></button>)}</div>}</div> }
 
-function Dashboard({ activeLedger, metrics, state, period, setPeriod, customFrom, customTo, setCustomFrom, setCustomTo, onAdd, onNavigate }: { activeLedger: Ledger; metrics: { income: number; expense: number; payables: number; receivables: number; topPayments: [string, number][]; checkTotal: number; upcomingChecks: Transaction[]; overdueChecks: Transaction[]; overdueTotal: number }; state: AppState; period: Period; setPeriod: (period: Period) => void; customFrom: string; customTo: string; setCustomFrom: (value: string) => void; setCustomTo: (value: string) => void; onAdd: () => void; onNavigate: (section: Section) => void }) { const periodLabel = period === 'today' ? 'Bugün' : period === 'month' ? 'Bu ay' : period === 'all' ? 'Tüm zamanlar' : 'Özel dönem'; return <><PageTitle title={activeLedger.name} description="Defterinizin finansal görünümü." action={onAdd} actionLabel="Yeni kayıt" /><div className="period-toolbar"><div className="period-title"><CalendarDays size={17} /><strong>Görüntüleme dönemi</strong></div><div className="period-tabs">{[['today', 'Günlük'], ['month', 'Aylık'], ['all', 'Tümü'], ['custom', 'Özel']].map(([value, label]) => <button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value as Period)}>{label}</button>)}</div>{period === 'custom' && <div className="date-range"><input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} /><span>-</span><input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} /></div>}<span className="period-caption">{periodLabel} hesapları</span></div><div className="notice"><strong>{activeLedger.name} defteri açık</strong><span>Bu ekrandaki tüm toplamlar yalnızca seçili deftere aittir.</span></div><section className="metric-grid"><Metric label={`${periodLabel} geliri`} value={metrics.income} icon={<ArrowDownLeft size={18} />} tone="positive" /><Metric label={`${periodLabel} gideri`} value={metrics.expense} icon={<ArrowUpRight size={18} />} tone="negative" /><Metric label="Açık borç" value={metrics.payables} icon={<WalletCards size={18} />} tone="orange" /><Metric label="Açık alacak" value={metrics.receivables} icon={<Banknote size={18} />} tone="blue" /></section><div className="dashboard-grid"><section className="panel"><div className="panel-heading"><div><h2>Son işlemler</h2><p className="muted">{periodLabel} dönemindeki hareketler</p></div><button className="text-button" onClick={() => onNavigate('transactions')}>Tümünü gör <ArrowUpRight size={15} /></button></div>{state.transactions.length ? <TransactionList transactions={state.transactions.slice(0, 5)} /> : <Empty icon={<WalletCards size={21} />} title="Henüz işlem yok" text="İlk gelir veya gider kaydınızı ekleyin." action="Yeni kayıt ekle" onClick={onAdd} />}</section><section className="panel"><div className="panel-heading"><div><h2>En çok ödeme yapılanlar</h2><p className="muted">{periodLabel} kişi bazında</p></div><Users size={20} className="muted-icon" /></div>{metrics.topPayments.length ? <div className="payer-list">{metrics.topPayments.map(([name, amount], index) => <div className="payer-row" key={name}><span className="payer-rank">{index + 1}</span><div className="payer-name"><strong>{name}</strong><span>Ödeme / gider</span></div><strong className="negative">{currency.format(amount)}</strong></div>)}</div> : <Empty icon={<Users size={21} />} title="Bu dönemde ödeme yok" text="Kişi seçerek ödeme veya gider kaydı eklediğinizde burada görünür." action="Kayıt ekle" onClick={onAdd} />}</section></div>{(metrics.upcomingChecks.length > 0 || metrics.overdueChecks.length > 0) && <section className="panel check-panel"><div className="panel-heading"><div><h2>Çek Takibi</h2><p className="muted">Vadesi yaklaşan ve geçmiş çekler</p></div><Clock size={20} className="muted-icon" /></div>{metrics.overdueChecks.length > 0 && <div className="overdue-notice"><strong>⚠ {metrics.overdueChecks.length} çekin vadesi geçmiş</strong><span>Toplam {currency.format(metrics.overdueTotal)}</span></div>}{metrics.upcomingChecks.map((check) => <div className="check-row" key={check.id}><div className="check-icon"><Banknote size={16} /></div><div className="transaction-info"><strong>{check.description}</strong><span>Çek No: {check.checkNumber || '—'} · {check.contact || 'Kişi belirtilmemiş'}</span></div><div className="check-meta"><strong className="negative">{currency.format(check.amount)}</strong><span className={`check-date${check.checkDate && check.checkDate < today ? " overdue" : ""}`}>Vade: {check.checkDate ? formatDateForForm(check.checkDate) : '—'}</span></div></div>)}</section>}</> }
+function Dashboard({
+  activeLedger,
+  metrics,
+  state: _state,
+  period,
+  setPeriod,
+  selectedMonth,
+  onChangeMonth,
+  onSelectMonth,
+  periodTransactions,
+  customFrom,
+  customTo,
+  setCustomFrom,
+  setCustomTo,
+  onAdd,
+  onEdit,
+  onDelete,
+  onNavigate,
+}: {
+  activeLedger: Ledger;
+  metrics: {
+    income: number;
+    expense: number;
+    payables: number;
+    receivables: number;
+    topPayments: [string, number][];
+    checkTotal: number;
+    upcomingChecks: Transaction[];
+    overdueChecks: Transaction[];
+    overdueTotal: number;
+  };
+  state: AppState;
+  period: Period;
+  setPeriod: (period: Period) => void;
+  selectedMonth: string;
+  onChangeMonth: (delta: number) => void;
+  onSelectMonth: (month: string) => void;
+  periodTransactions: Transaction[];
+  customFrom: string;
+  customTo: string;
+  setCustomFrom: (value: string) => void;
+  setCustomTo: (value: string) => void;
+  onAdd: () => void;
+  onEdit?: (transaction: Transaction) => void;
+  onDelete?: (id: string) => void;
+  onNavigate: (section: Section) => void;
+}) {
+  const isCurrentMonth = selectedMonth === today.slice(0, 7);
+  const selectedMonthDate = new Date(`${selectedMonth}-01T12:00:00`);
+  const selectedMonthName = monthFormatter.format(selectedMonthDate);
+
+  const periodLabel =
+    period === 'today'
+      ? 'Bugün'
+      : period === 'month'
+      ? (isCurrentMonth ? `Bu ay (${selectedMonthName})` : selectedMonthName)
+      : period === 'all'
+      ? 'Tüm zamanlar'
+      : 'Özel dönem';
+
+  return (
+    <>
+      <PageTitle title={activeLedger.name} description="Defterinizin finansal görünümü." action={onAdd} actionLabel="Yeni kayıt" />
+      <div className="period-toolbar">
+        <div className="period-title">
+          <CalendarDays size={17} />
+          <strong>Görüntüleme dönemi</strong>
+        </div>
+        <div className="period-tabs">
+          {[
+            ['today', 'Günlük'],
+            ['month', 'Aylık'],
+            ['all', 'Tümü'],
+            ['custom', 'Özel'],
+          ].map(([value, label]) => (
+            <button key={value} className={period === value ? 'active' : ''} onClick={() => setPeriod(value as Period)}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {period === 'month' && (
+          <div className="month-navigator">
+            <button
+              type="button"
+              className="month-nav-btn"
+              onClick={() => onChangeMonth(-1)}
+              title="Önceki Ay"
+              aria-label="Önceki Ay"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="current-month-display">{selectedMonthName}</span>
+            <button
+              type="button"
+              className="month-nav-btn"
+              onClick={() => onChangeMonth(1)}
+              title="Sonraki Ay"
+              aria-label="Sonraki Ay"
+            >
+              <ChevronRight size={16} />
+            </button>
+            {!isCurrentMonth && (
+              <button
+                type="button"
+                className="back-to-current-month-btn"
+                onClick={() => onSelectMonth(today.slice(0, 7))}
+                title="Güncel aya dön"
+              >
+                Bu aya dön
+              </button>
+            )}
+          </div>
+        )}
+
+        {period === 'custom' && (
+          <div className="date-range">
+            <input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} />
+            <span>-</span>
+            <input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} />
+          </div>
+        )}
+        <span className="period-caption">{periodLabel} hesapları</span>
+      </div>
+
+      <div className="notice">
+        <strong>{activeLedger.name} defteri açık</strong>
+        <span>Bu ekrandaki tüm toplamlar yalnızca seçili deftere aittir.</span>
+      </div>
+
+      <section className="metric-grid">
+        <Metric label={`${periodLabel} geliri`} value={metrics.income} icon={<ArrowDownLeft size={18} />} tone="positive" />
+        <Metric label={`${periodLabel} gideri`} value={metrics.expense} icon={<ArrowUpRight size={18} />} tone="negative" />
+        <Metric label="Açık borç" value={metrics.payables} icon={<WalletCards size={18} />} tone="orange" />
+        <Metric label="Açık alacak" value={metrics.receivables} icon={<Banknote size={18} />} tone="blue" />
+      </section>
+
+      <div className="dashboard-grid">
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Son işlemler</h2>
+              <p className="muted">{periodLabel} hareketleri</p>
+            </div>
+            <button className="text-button" onClick={() => onNavigate('transactions')}>
+              Tümünü gör <ArrowUpRight size={15} />
+            </button>
+          </div>
+          {periodTransactions.length ? (
+            <TransactionList transactions={periodTransactions.slice(0, 5)} onEdit={onEdit} onDelete={onDelete} />
+          ) : (
+            <Empty
+              icon={<WalletCards size={21} />}
+              title={`${periodLabel} döneminde henüz işlem yok`}
+              text={
+                period === 'month' && isCurrentMonth
+                  ? "Kasım ayında henüz kayıt girmediniz. Geçen ayki (Ekim) kayıtlarınızı görmek için yukarıdaki oktan (<) önceki aya geçebilir veya 'Tümü' butonuna tıklayabilirsiniz."
+                  : "Bu döneme ait henüz bir gelir veya gider kaydı bulunamadı."
+              }
+              action={period === 'month' && isCurrentMonth ? "Önceki aya (Ekim 2026) git" : "Yeni kayıt ekle"}
+              onClick={period === 'month' && isCurrentMonth ? () => onChangeMonth(-1) : onAdd}
+            />
+          )}
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h2>En çok ödeme yapılanlar</h2>
+              <p className="muted">{periodLabel} kişi bazında</p>
+            </div>
+            <Users size={20} className="muted-icon" />
+          </div>
+          {metrics.topPayments.length ? (
+            <div className="payer-list">
+              {metrics.topPayments.map(([name, amount], index) => (
+                <div className="payer-row" key={name}>
+                  <span className="payer-rank">{index + 1}</span>
+                  <div className="payer-name">
+                    <strong>{name}</strong>
+                    <span>Ödeme / gider</span>
+                  </div>
+                  <strong className="negative">{currency.format(amount)}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty
+              icon={<Users size={21} />}
+              title="Bu dönemde ödeme yok"
+              text="Kişi seçerek ödeme veya gider kaydı eklediğinizde burada görünür."
+              action="Kayıt ekle"
+              onClick={onAdd}
+            />
+          )}
+        </section>
+      </div>
+
+      {(metrics.upcomingChecks.length > 0 || metrics.overdueChecks.length > 0) && (
+        <section className="panel check-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Çek Takibi</h2>
+              <p className="muted">Vadesi yaklaşan ve geçmiş çekler</p>
+            </div>
+            <Clock size={20} className="muted-icon" />
+          </div>
+          {metrics.overdueChecks.length > 0 && (
+            <div className="overdue-notice">
+              <strong>⚠ {metrics.overdueChecks.length} çekin vadesi geçmiş</strong>
+              <span>Toplam {currency.format(metrics.overdueTotal)}</span>
+            </div>
+          )}
+          {metrics.upcomingChecks.map((check) => (
+            <div className="check-row" key={check.id}>
+              <div className="check-icon">
+                <Banknote size={16} />
+              </div>
+              <div className="transaction-info">
+                <strong>{check.description}</strong>
+                <span>
+                  Çek No: {check.checkNumber || '—'} · {check.contact || 'Kişi belirtilmemiş'}
+                </span>
+              </div>
+              <div className="check-meta">
+                <strong className="negative">{currency.format(check.amount)}</strong>
+                <span className={`check-date${check.checkDate && check.checkDate < today ? ' overdue' : ''}`}>
+                  Vade: {check.checkDate ? formatDateForForm(check.checkDate) : '—'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+    </>
+  );
+}
 function Metric({ label, value, icon, tone }: { label: string; value: number; icon: React.ReactNode; tone: string }) { return <article className="metric"><div className={`metric-icon ${tone}`}>{icon}</div><span>{label}</span><strong>{currency.format(value)}</strong><small>Seçili defter ve dönem</small></article> }
 function TransactionList({ transactions, onEdit, onDelete }: { transactions: Transaction[]; onEdit?: (transaction: Transaction) => void; onDelete?: (id: string) => void }) { return <div className="transaction-list">{transactions.map((item) => { const positive = item.kind === 'income' || item.kind === 'collection'; return <div className="transaction-row" key={item.id}><div className={`transaction-icon ${positive ? 'positive' : 'negative'}`}>{positive ? <ArrowDownLeft size={16} /> : <ArrowUpRight size={16} />}</div><div className="transaction-info"><strong>{item.description}</strong><span>{kindLabels[item.kind]} · {dateFormatter.format(new Date(`${item.date}T12:00:00`))}{item.contact && ` · ${item.contact}`}{item.kind === 'check' && item.checkDate && ` · Vade ${formatDateForForm(item.checkDate)}`}</span></div><strong className={positive ? 'positive' : 'negative'}>{positive ? '+' : '-'}{currency.format(item.amount)}</strong>{onEdit && <button className="edit-transaction" aria-label="İşlemi düzenle" onClick={() => onEdit(item)}><Pencil size={14} /></button>}{onDelete && <button className="edit-transaction delete-transaction" aria-label="İşlemi sil" onClick={() => { if (confirm('Bu kaydı silmek istediğinize emin misiniz?')) onDelete(item.id) }}><Trash2 size={14} /></button>}</div> })}</div> }
 function Transactions({ transactions, query, setQuery, onAdd, onEdit, onDelete }: { transactions: Transaction[]; query: string; setQuery: (value: string) => void; onAdd: () => void; onEdit: (transaction: Transaction) => void; onDelete: (id: string) => void }) { return <><PageTitle title="İşlemler" description="Gelir, gider, borç ve alacak hareketlerinizi yönetin." action={onAdd} actionLabel="Yeni işlem" /><div className="toolbar"><div className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="İşlem ara..." /></div><button className="filter-button"><CalendarDays size={16} /> Tarih <ChevronDown size={15} /></button><button className="filter-button">Tüm türler <ChevronDown size={15} /></button></div><section className="panel">{transactions.length ? <TransactionList transactions={transactions} onEdit={onEdit} onDelete={onDelete} /> : <Empty icon={<Search size={21} />} title={query ? 'Sonuç bulunamadı' : 'Henüz finansal kayıt yok'} text="Yeni bir kayıt ekleyerek başlayın." action="Yeni işlem ekle" onClick={onAdd} />}</section></> }

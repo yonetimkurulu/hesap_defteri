@@ -854,3 +854,53 @@ button,input,select { font:inherit; } button { cursor:pointer; }
 .ledger-item-row.selected .ledger-rename-btn {
   color: #123b2b !important;
 }
+
+
+/* ── Ay Değiştirici (Month Navigator) ─────────────────────────── */
+.month-navigator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--paper);
+  padding: 3px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.month-nav-btn {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.month-nav-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--green);
+}
+.current-month-display {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink);
+  min-width: 90px;
+  text-align: center;
+  text-transform: capitalize;
+}
+.back-to-current-month-btn {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--green-soft);
+  color: var(--green);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.back-to-current-month-btn:hover {
+  background: var(--green);
+  color: #ffffff;
+}
