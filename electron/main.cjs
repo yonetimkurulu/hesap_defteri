@@ -28,12 +28,17 @@ if (!gotTheLock) {
     mainWindow = new BrowserWindow({
       width: 1440,
       height: 920,
-      minWidth: 1024,
-      minHeight: 700,
+      minWidth: 960,
+      minHeight: 560,
       backgroundColor: '#f3f7f3',
       title: 'Hesap Defteri',
       icon: path.join(__dirname, '..', 'build', 'icon.ico'),
-      autoHideMenuBar: true,
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: '#ffffff',
+        symbolColor: '#123b2b',
+        height: 44,
+      },
       webPreferences: {
         preload: path.join(__dirname, 'preload.cjs'),
         contextIsolation: true,

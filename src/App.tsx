@@ -96,7 +96,7 @@ function App() {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.2.6')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.2.7')
 
   useEffect(() => {
     if (!window.hesapDefteriDesktop) return
@@ -291,7 +291,9 @@ function App() {
   };
   const visibleTransactions = state.transactions.filter((item) => `${item.description} ${item.category} ${item.contact || ''}`.toLocaleLowerCase('tr').includes(query.toLocaleLowerCase('tr')))
 
-  return <div className="app-shell"><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} /><nav>{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMobileNav(false) }}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-bottom"><UpdateWidget updateState={updateState} installedVersion={installedVersion} onCheck={checkForUpdate} onDownload={startDownload} onInstall={installAndRestart} />
+  const isDesktop = typeof window !== 'undefined' && Boolean(window.hesapDefteriDesktop);
+
+  return <div className={`app-shell ${isDesktop ? 'is-desktop' : ''}`}><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} /><nav>{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMobileNav(false) }}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-bottom"><UpdateWidget updateState={updateState} installedVersion={installedVersion} onCheck={checkForUpdate} onDownload={startDownload} onInstall={installAndRestart} />
 <a className="download-link" href={desktopDownloadUrl} target="_blank" rel="noreferrer"><Download size={18} />Web / Sürümler</a>
 <button type="button" className="profile profile-clickable" onClick={() => setRenameModalOpen(true)} title="Şirket adını düzenle"><div className="avatar">{getInitials(companyName)}</div><div><strong>{companyName}</strong><span>Şirket Profilini Düzenle ✏️</span></div></button>
 </div></aside>{mobileNav && <button className="backdrop" aria-label="Menüyü kapat" onClick={() => setMobileNav(false)} />}<main className="main-content"><header className="topbar"><button className="icon-button menu-button" aria-label="Menüyü aç" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="breadcrumb"><span>{companyName}</span><b>/</b><span>{activeLedger.name} Defteri</span><b>/</b><strong>{navItems.find((item) => item.id === section)?.label}</strong></div><div className="top-actions"><span className="online"><i />{remoteError ? 'Bağlantı hatası' : isSupabaseConfigured ? 'Güvenli bağlantı' : 'Yerel çalışma modu'}</span><button type="button" className="icon-button help-icon-btn" aria-label="Yardım Rehberi" title="Kullanım Rehberi" onClick={() => setHelpOpen(true)}><CircleHelp size={20} /></button><button type="button" className="mini-avatar-btn" onClick={() => setRenameModalOpen(true)} title={`${companyName} - Şirket Adını Düzenle`}><div className="mini-avatar">{getInitials(companyName)}</div></button></div></header>{updateState.status !== 'idle' && updateState.status !== 'not-available' && (
