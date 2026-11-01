@@ -15,7 +15,9 @@ export interface ParsedBankRow {
   amount: number;        // Pozitif sayı
   type: 'income' | 'expense'; // Gelir (Giriş) veya Gider (Çıkış)
   balance?: number;      // Bakiye (varsa)
-  rawAmount: string;
+  rawAmount: string;     // PDF'teki tam metin (ör. "-150.000,00 TL")
+  rawBalance: string;    // PDF'teki tam bakiye metni (ör. "245.336,44 TL")
+  referenceNo: string;   // Referans Numarası (ör. "A00QY")
 }
 
 export interface StatementParseResult {
@@ -128,7 +130,6 @@ export async function parseBankStatementPdf(file: File): Promise<StatementParseR
   const rows: ParsedBankRow[] = [];
 
   const dateRegex = /^\d{2}[./-]\d{2}[./-]\d{4}$/;
-  const amountRegex = /-?\s*\d{1,3}(?:[.,]\d{3})*[.,]\d{2}/g;
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
@@ -181,45 +182,54 @@ export async function parseBankStatementPdf(file: File): Promise<StatementParseR
         .sort((a, b) => (b.y !== a.y ? b.y - a.y : a.x - b.x));
       const description = descItems.map((it) => it.text).join(' ').replace(/\s+/g, ' ').trim();
 
-      // Tutar & Bakiye sütunu: X >= 290
+      // Tutar & Bakiye sütunu: X >= 290 && X < 450
       const amountItems = rowItems.filter((it) => it.x >= 290 && it.x < 450);
       const combinedAmountStr = amountItems.map((it) => it.text).join(' ');
 
-      // Sayıları ayıkla
-      const matches = combinedAmountStr.match(amountRegex) || [];
+      // Sayıları ve varsa yanındaki TL ifadesini ayıkla (örn: "2.150.000,00 TL" veya "-150.000,00 TL")
+      const matches = Array.from(
+        combinedAmountStr.matchAll(/(-?\s*\d{1,3}(?:\.\d{3})*,\d{2}(?:\s*TL)?)/gi)
+      ).map((m) => m[1].trim());
+
+      // Referans Numarası: X >= 450
+      const refItems = rowItems.filter((it) => it.x >= 450);
+      const referenceNo = refItems.map((it) => it.text).join(' ').trim();
 
       let amount = 0;
       let isExpense = false;
       let balance: number | undefined = undefined;
       let rawAmount = '';
+      let rawBalance = '';
 
       if (matches.length > 0) {
-        const firstAmtStr = matches[0] ?? '';
+        let firstAmtStr = matches[0] ?? '';
+        if (firstAmtStr && !firstAmtStr.includes('TL')) {
+          firstAmtStr += ' TL';
+        }
         rawAmount = firstAmtStr;
         const parsed = parseTrAmount(firstAmtStr);
         amount = Math.abs(parsed);
 
         // Borç / Alacak Tespiti:
-        // 1. Sayı eksi ile başlıyorsa -> ÇIKIŞ (Gider)
         if (parsed < 0 || firstAmtStr.includes('-')) {
           isExpense = true;
-        }
-        // 2. Sayı pozitifse:
-        // Vakıf Katılım, Ziraat gibi ekstrelerde pozitif tutarlar GİRİŞ (Alacak) anlamına gelir
-        else {
+        } else {
           isExpense = false;
         }
 
-        // Açıklama bazlı teyit (örn. 'Amir=' gelen para, 'Lehdar=' giden para)
+        // Açıklama bazlı teyit
         const descLower = description.toLowerCase();
         if (descLower.includes('lehdar=') || descLower.includes('lhd:') || descLower.includes('fat.tahs') || descLower.includes('pos')) {
-          // Eğer tutarda açıkça + yoksa ve açıklama fatura/lehdar ise çıkıştır
           if (firstAmtStr.includes('-')) isExpense = true;
         }
 
         // İkinci sayı varsa bu Bakiye'dir
-        const secondAmtStr = matches[1];
+        let secondAmtStr = matches[1];
         if (secondAmtStr) {
+          if (!secondAmtStr.includes('TL')) {
+            secondAmtStr += ' TL';
+          }
+          rawBalance = secondAmtStr;
           balance = Math.abs(parseTrAmount(secondAmtStr));
         }
       }
@@ -234,6 +244,8 @@ export async function parseBankStatementPdf(file: File): Promise<StatementParseR
           type: isExpense ? 'expense' : 'income',
           balance,
           rawAmount,
+          rawBalance,
+          referenceNo,
         });
       }
     }
@@ -263,22 +275,22 @@ export async function parseBankStatementPdf(file: File): Promise<StatementParseR
  */
 export function exportStatementToExcel(result: StatementParseResult, fileName = 'Banka-Ekstresi.xlsx') {
   const excelData = result.rows.map((row) => ({
-    'Tarih': row.rawDate,
-    'İşlem Türü': row.type === 'income' ? 'Giriş (Alacak)' : 'Çıkış (Borç)',
+    'İşlem Tarihi': row.rawDate,
     'Açıklama': row.description,
-    'Tutar (TL)': row.amount,
-    ...(row.balance !== undefined ? { 'Bakiye (TL)': row.balance } : {}),
+    'Tutar': row.rawAmount,
+    'Bakiye': row.rawBalance,
+    ...(row.referenceNo ? { 'Referans Numarası': row.referenceNo } : {}),
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(excelData);
 
   // Kolon genişliklerini otomatik ayarla
   worksheet['!cols'] = [
-    { wch: 14 }, // Tarih
-    { wch: 16 }, // Tür
-    { wch: 60 }, // Açıklama
-    { wch: 18 }, // Tutar
-    { wch: 18 }, // Bakiye
+    { wch: 14 }, // İşlem Tarihi
+    { wch: 65 }, // Açıklama
+    { wch: 20 }, // Tutar
+    { wch: 20 }, // Bakiye
+    { wch: 18 }, // Referans Numarası
   ];
 
   const workbook = XLSX.utils.book_new();

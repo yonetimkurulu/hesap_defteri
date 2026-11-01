@@ -258,12 +258,13 @@ export function BankConverter({ onImportToLedger, activeLedgerName }: BankConver
               <table className="converter-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '110px' }}>Tarih</th>
-                    <th style={{ width: '90px' }}>Tür</th>
+                    <th style={{ width: '105px' }}>İşlem Tarihi</th>
+                    <th style={{ width: '75px' }}>Tür</th>
                     <th>Açıklama</th>
-                    <th style={{ width: '140px', textAlign: 'right' }}>Tutar</th>
-                    <th style={{ width: '140px', textAlign: 'right' }}>Bakiye</th>
-                    <th style={{ width: '45px' }}></th>
+                    <th style={{ width: '150px', textAlign: 'right' }}>Tutar</th>
+                    <th style={{ width: '150px', textAlign: 'right' }}>Bakiye</th>
+                    <th style={{ width: '85px', textAlign: 'center' }}>Referans</th>
+                    <th style={{ width: '40px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -278,11 +279,14 @@ export function BankConverter({ onImportToLedger, activeLedgerName }: BankConver
                       <td className="desc-cell" title={row.description}>
                         {row.description}
                       </td>
-                      <td className={`amount-cell ${row.type === 'income' ? 'positive' : 'negative'}`}>
-                        {row.type === 'income' ? '+' : '-'}{currency.format(row.amount)}
+                      <td className={`amount-cell ${row.type === 'income' ? 'positive' : 'negative'}`} style={{ fontWeight: 600 }}>
+                        {row.rawAmount}
                       </td>
-                      <td style={{ textAlign: 'right', color: '#64748b', fontSize: '12px' }}>
-                        {row.balance !== undefined ? currency.format(row.balance) : '-'}
+                      <td style={{ textAlign: 'right', color: '#475569', fontSize: '12px' }}>
+                        {row.rawBalance || (row.balance !== undefined ? currency.format(row.balance) : '-')}
+                      </td>
+                      <td style={{ textAlign: 'center', color: '#64748b', fontSize: '11px', fontFamily: 'monospace' }}>
+                        {row.referenceNo || '-'}
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <button
