@@ -10,11 +10,15 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Trash2,
+  History,
+  Eye,
+  Clock,
 } from 'lucide-react';
 import {
   parseBankStatementPdf,
   exportStatementToExcel,
   type StatementParseResult,
+  type ParsedBankRow,
 } from '../lib/bankStatementParser';
 
 interface BankConverterProps {
@@ -27,6 +31,33 @@ interface BankConverterProps {
   activeLedgerName: string;
 }
 
+export interface StatementHistoryItem {
+  id: string;
+  fileName: string;
+  bankName: string;
+  parsedAt: string;
+  formattedDate: string;
+  rowCount: number;
+  totalIncome: number;
+  totalExpense: number;
+  rows: ParsedBankRow[];
+}
+
+const STATEMENT_HISTORY_KEY = 'hesap-defteri-statement-history-v1';
+
+function readHistory(): StatementHistoryItem[] {
+  try {
+    const raw = localStorage.getItem(STATEMENT_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(items: StatementHistoryItem[]) {
+  localStorage.setItem(STATEMENT_HISTORY_KEY, JSON.stringify(items.slice(0, 25)));
+}
+
 export function BankConverter({ onImportToLedger, activeLedgerName }: BankConverterProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +65,7 @@ export function BankConverter({ onImportToLedger, activeLedgerName }: BankConver
   const [fileName, setFileName] = useState<string>('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [imported, setImported] = useState(false);
+  const [history, setHistory] = useState<StatementHistoryItem[]>(readHistory);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currency = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' });
@@ -55,6 +87,32 @@ export function BankConverter({ onImportToLedger, activeLedgerName }: BankConver
         setError('Bu PDF içinde hesap hareketi veya tablo tespit edilemedi. Dosyanın şifresiz ve taranabilir bir banka ekstresi olduğundan emin olun.');
       } else {
         setParseResult(result);
+
+        // Geçmişe ekle / güncelle
+        const now = new Date();
+        const formattedDate = new Intl.DateTimeFormat('tr-TR', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(now);
+
+        const newHistoryItem: StatementHistoryItem = {
+          id: crypto.randomUUID(),
+          fileName: file.name,
+          bankName: result.bankName,
+          parsedAt: now.toISOString(),
+          formattedDate,
+          rowCount: result.rows.length,
+          totalIncome: result.totalIncome,
+          totalExpense: result.totalExpense,
+          rows: result.rows,
+        };
+
+        const updatedHistory = [newHistoryItem, ...history.filter((h) => h.fileName !== file.name)];
+        setHistory(updatedHistory);
+        saveHistory(updatedHistory);
       }
     } catch (err: unknown) {
       console.error(err);
@@ -108,95 +166,139 @@ export function BankConverter({ onImportToLedger, activeLedgerName }: BankConver
     }
     setParseResult({
       ...parseResult,
-      rows: updatedRows,
       totalIncome: inSum,
       totalExpense: outSum,
+      rows: updatedRows,
     });
   };
 
-  const handleReset = () => {
-    setParseResult(null);
-    setFileName('');
-    setError(null);
+  const handleLoadFromHistory = (item: StatementHistoryItem) => {
+    setParseResult({
+      bankName: item.bankName,
+      totalIncome: item.totalIncome,
+      totalExpense: item.totalExpense,
+      rows: item.rows,
+    });
+    setFileName(item.fileName);
     setImported(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDownloadFromHistory = (item: StatementHistoryItem) => {
+    const excelName = item.fileName.replace(/\.pdf$/i, '') + '-Cevrilmis.xlsx';
+    exportStatementToExcel(
+      {
+        bankName: item.bankName,
+        totalIncome: item.totalIncome,
+        totalExpense: item.totalExpense,
+        rows: item.rows,
+      },
+      excelName
+    );
+  };
+
+  const handleDeleteHistoryItem = (id: string) => {
+    const updated = history.filter((h) => h.id !== id);
+    setHistory(updated);
+    saveHistory(updated);
+  };
+
+  const handleClearHistory = () => {
+    if (window.confirm('Tüm dönüştürülmüş ekstre geçmişi temizlensin mi?')) {
+      setHistory([]);
+      localStorage.removeItem(STATEMENT_HISTORY_KEY);
+    }
   };
 
   return (
     <div className="bank-converter-wrap">
-      <div className="page-heading">
+      {/* Sayfa Başlığı */}
+      <div className="converter-header">
         <div>
-          <h1>Banka & PDF Dönüştürücü</h1>
+          <h2>Banka & PDF Dönüştürücü</h2>
           <p className="muted">
-            Ziraat, Vakıfbank, Garanti vb. banka hesap ekstrelerinizi tek tıkla Excel'e çevirin veya defterinize aktarın.
+            Ziraat, Vakıf Katılım, Garanti vb. banka hesap ekstrelerinizi tek tıkla Excel'e çevirin veya defterinize aktarın.
           </p>
         </div>
       </div>
 
-      {!parseResult && (
-        <div
-          className={`pdf-dropzone ${isDragOver ? 'drag-over' : ''} ${loading ? 'loading' : ''}`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDragOver(true);
-          }}
-          onDragLeave={() => setIsDragOver(false)}
-          onDrop={handleDrop}
-          onClick={() => !loading && fileInputRef.current?.click()}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/pdf"
-            style={{ display: 'none' }}
-            onChange={handleFileInput}
-          />
+      {/* Sürükle - Bırak Yükleme Alanı */}
+      <div
+        className={`converter-dropzone ${isDragOver ? 'drag-over' : ''} ${loading ? 'loading' : ''}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileInput}
+          accept="application/pdf"
+          style={{ display: 'none' }}
+        />
 
-          {loading ? (
-            <div className="dropzone-loading">
-              <RefreshCw size={36} className="spin" />
-              <strong>PDF Okunuyor ve Tablolar Ayrıştırılıyor...</strong>
-              <p>Çok satırlı açıklamalar ve para hareketleri taranıyor, lütfen bekleyin.</p>
+        {loading ? (
+          <div className="dropzone-content">
+            <RefreshCw size={36} className="spin dropzone-icon" />
+            <h3>Ekstre Ayrıştırılıyor...</h3>
+            <p>PDF tablosu okunuyor, satırlar ve tutarlar ayıklanıyor.</p>
+          </div>
+        ) : (
+          <div className="dropzone-content">
+            <div className="dropzone-icon-wrap">
+              <UploadCloud size={38} />
             </div>
-          ) : (
-            <div className="dropzone-idle">
-              <div className="upload-icon-circle">
-                <UploadCloud size={32} />
-              </div>
-              <h3>Banka Ekstresi PDF Dosyasını Buraya Sürükleyin</h3>
-              <p>veya bilgisayarınızdan seçmek için <strong>tıklayın</strong></p>
-              <span className="file-badge">Ziraat · Vakıfbank · Garanti · İş Bankası · Halkbank · Tüm Bankalar</span>
-            </div>
-          )}
-        </div>
-      )}
+            <h3>Banka Ekstresi PDF Dosyasını Buraya Sürükleyin</h3>
+            <p>veya bilgisayarınızdan seçmek için <span>tıklayın</span></p>
+            <span className="dropzone-hint">Vakıf Katılım, Ziraat, VakıfBank, Garanti, İş Bankası vb. tüm bankalar desteklenir</span>
+          </div>
+        )}
+      </div>
 
       {error && (
-        <div className="converter-error">
+        <div className="notice converter-error">
           <AlertCircle size={18} />
           <span>{error}</span>
         </div>
       )}
 
+      {/* Ayrıştırma Sonuç Alanı */}
       {parseResult && (
-        <div className="converter-result-panel">
-          {/* Üst Özet Kartı */}
-          <div className="result-header-card">
-            <div className="result-title-group">
-              <div className="bank-badge-icon">
+        <div className="converter-results">
+          {/* Üst Bilgi Çubuğu & İşlem Butonları */}
+          <div className="converter-top-card">
+            <div className="bank-badge-info">
+              <div className="bank-logo-icon">
                 <FileCheck2 size={24} />
               </div>
               <div>
-                <h2>{parseResult.bankName} Ekstresi Başarıyla Okundu</h2>
-                <span className="result-filename">{fileName} · {parseResult.rows.length} işlem hareketi</span>
+                <h4>{parseResult.bankName} Ekstresi Başarıyla Okundu</h4>
+                <p>
+                  {fileName} · <strong>{parseResult.rows.length} işlem hareketi</strong>
+                </p>
               </div>
             </div>
 
-            <div className="result-actions">
-              <button type="button" className="secondary-button" onClick={handleReset}>
+            <div className="converter-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setParseResult(null);
+                  setFileName('');
+                }}
+              >
                 Yeni Dosya Yükle
               </button>
-              <button type="button" className="primary-button btn-excel-download" onClick={handleDownloadExcel}>
+              <button
+                type="button"
+                className="primary-button btn-download-excel"
+                onClick={handleDownloadExcel}
+              >
                 <Download size={16} /> Excel İndir (.xlsx)
               </button>
               <button
@@ -280,10 +382,10 @@ export function BankConverter({ onImportToLedger, activeLedgerName }: BankConver
                         {row.description}
                       </td>
                       <td className={`amount-cell ${row.type === 'income' ? 'positive' : 'negative'}`} style={{ fontWeight: 600 }}>
-                        {row.rawAmount}
+                        {row.type === 'income' ? `+${currency.format(row.amount)}` : `-${currency.format(row.amount)}`}
                       </td>
-                      <td style={{ textAlign: 'right', color: '#475569', fontSize: '12px' }}>
-                        {row.rawBalance || (row.balance !== undefined ? currency.format(row.balance) : '-')}
+                      <td style={{ textAlign: 'right', color: '#475569', fontSize: '12px', fontWeight: 500 }}>
+                        {row.balance !== undefined ? currency.format(row.balance) : (row.rawBalance || '-')}
                       </td>
                       <td style={{ textAlign: 'center', color: '#64748b', fontSize: '11px', fontFamily: 'monospace' }}>
                         {row.referenceNo || '-'}
@@ -306,6 +408,83 @@ export function BankConverter({ onImportToLedger, activeLedgerName }: BankConver
           </div>
         </div>
       )}
+
+      {/* Dönüştürülen Ekstre Geçmişi Bölümü */}
+      <div className="panel statement-history-panel">
+        <div className="history-panel-header">
+          <div className="history-title-group">
+            <History size={20} />
+            <div>
+              <h3>Dönüştürülen Ekstre Geçmişi</h3>
+              <p className="muted">Daha önce yükleyip Excel'e dönüştürdüğünüz ekstreler burada saklanır; istediğiniz zaman tekrar indirebilirsiniz.</p>
+            </div>
+          </div>
+          {history.length > 0 && (
+            <button type="button" className="secondary-button btn-xs text-danger" onClick={handleClearHistory}>
+              Geçmişi Temizle
+            </button>
+          )}
+        </div>
+
+        {history.length > 0 ? (
+          <div className="statement-history-list">
+            {history.map((item) => (
+              <div key={item.id} className="history-item-row">
+                <div className="history-item-main">
+                  <div className="history-item-badge">
+                    <FileSpreadsheet size={20} />
+                  </div>
+                  <div className="history-item-info">
+                    <div className="history-item-title">
+                      <strong>{item.fileName}</strong>
+                      <span className="bank-pill">{item.bankName}</span>
+                      <span className="count-pill">{item.rowCount} İşlem</span>
+                    </div>
+                    <span className="history-item-time">{item.formattedDate}</span>
+                  </div>
+                </div>
+
+                <div className="history-item-totals">
+                  <span className="pos">+{currency.format(item.totalIncome)}</span>
+                  <span className="neg">-{currency.format(item.totalExpense)}</span>
+                </div>
+
+                <div className="history-item-actions">
+                  <button
+                    type="button"
+                    className="secondary-button btn-sm"
+                    title="Önizlemeyi ekranda aç"
+                    onClick={() => handleLoadFromHistory(item)}
+                  >
+                    <Eye size={14} /> Aç
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-button btn-sm"
+                    title="Excel olarak indir"
+                    onClick={() => handleDownloadFromHistory(item)}
+                  >
+                    <Download size={14} /> Excel İndir
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button delete-row-btn"
+                    title="Geçmişten sil"
+                    onClick={() => handleDeleteHistoryItem(item.id)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="history-empty">
+            <Clock size={24} />
+            <p>Henüz dönüştürülmüş ekstre geçmişi bulunmuyor. Bir PDF yüklediğinizde burada listelenecektir.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

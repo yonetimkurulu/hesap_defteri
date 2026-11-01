@@ -126,7 +126,7 @@ function App() {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.3.2')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.3.3')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   useEffect(() => {
@@ -298,6 +298,14 @@ function App() {
     const overdueTotal = overdueChecks.reduce((total, item) => total + item.amount, 0)
     return { income: sum('income'), expense: sum('expense'), payables: Math.max(sum('payable') - sum('payment'), 0), receivables: Math.max(sum('receivable') - sum('collection'), 0), topPayments, checkTotal, upcomingChecks, overdueChecks, overdueTotal }
   }, [periodTransactions, state.transactions])
+
+  const activeLedgerBalance = useMemo(() => {
+    return state.transactions.reduce((acc, t) => {
+      if (t.kind === 'income' || t.kind === 'collection') return acc + t.amount;
+      if (t.kind === 'expense' || t.kind === 'payment') return acc - t.amount;
+      return acc;
+    }, 0);
+  }, [state.transactions]);
   if (isSupabaseConfigured && !authReady) return <LoadingScreen />
   if (isSupabaseConfigured && !session && !skipAuth) {
     return (
@@ -432,8 +440,52 @@ function App() {
 
   const isDesktop = typeof window !== 'undefined' && Boolean(window.hesapDefteriDesktop);
 
-  return <div className={`app-shell ${isDesktop ? 'is-desktop' : ''}`}><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={19} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} onSaveLedger={(l) => { if (session?.user) void cloudSaveLedger(session.user.id, l); }} /><nav>{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={section === id ? 'active' : ''} onClick={() => { setSection(id); setMobileNav(false) }}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-bottom"><UpdateWidget updateState={updateState} installedVersion={installedVersion} onCheck={checkForUpdate} onDownload={startDownload} onInstall={installAndRestart} />
-<a className="download-link" href={desktopDownloadUrl} target="_blank" rel="noreferrer"><Download size={18} />Web / Sürümler</a>
+  return <div className={`app-shell ${isDesktop ? 'is-desktop' : ''}`}><aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}><div className="brand"><div className="brand-mark"><Banknote size={20} /></div><div><strong>Hesap Defteri</strong><span>İşletme hesabınız</span></div></div><LedgerSwitcher ledgers={ledgers} activeLedgerId={activeLedgerId} setLedgers={setLedgers} onSaveLedger={(l) => { if (session?.user) void cloudSaveLedger(session.user.id, l); }} /><nav className="sidebar-nav">
+  <span className="nav-section-label">ANA YÖNETİM</span>
+  <button className={section === 'dashboard' ? 'active' : ''} onClick={() => { setSection('dashboard'); setMobileNav(false) }}><LayoutDashboard size={20} /><span>Genel Bakış</span></button>
+  <button className={section === 'transactions' ? 'active' : ''} onClick={() => { setSection('transactions'); setMobileNav(false) }}><WalletCards size={20} /><span>İşlemler</span></button>
+  <button className={section === 'contacts' ? 'active' : ''} onClick={() => { setSection('contacts'); setMobileNav(false) }}><Users size={20} /><span>Kişiler</span></button>
+  <span className="nav-section-label">ARAÇLAR & MODÜLLER</span>
+  <button className={section === 'converter' ? 'active' : ''} onClick={() => { setSection('converter'); setMobileNav(false) }}><FileSpreadsheet size={20} /><span>PDF / Ekstre</span><span className="nav-pill-badge">Excel</span></button>
+  <button className={section === 'reports' ? 'active' : ''} onClick={() => { setSection('reports'); setMobileNav(false) }}><FileDown size={20} /><span>Raporlar</span></button>
+</nav>
+
+<div className="sidebar-summary-card">
+  <div className="summary-title">
+    <WalletCards size={13} />
+    <span>KASA & BAKİYE DURUMU</span>
+  </div>
+  <div className="summary-balance">
+    <small>{activeLedger.name} Net Kasa</small>
+    <strong className={activeLedgerBalance >= 0 ? "pos" : "neg"}>
+      {currency.format(activeLedgerBalance)}
+    </strong>
+  </div>
+  <div className="summary-stats-grid">
+    <div className="summary-stat-col">
+      <small>Bu Ay Gelir</small>
+      <span className="pos">+{currency.format(metrics.income)}</span>
+    </div>
+    <div className="summary-stat-col">
+      <small>Bu Ay Gider</small>
+      <span className="neg">-{currency.format(metrics.expense)}</span>
+    </div>
+  </div>
+  <button
+    type="button"
+    className="sidebar-quick-add-btn"
+    onClick={() => {
+      setEditingTransaction(null);
+      setTransactionKind('expense');
+      setModal('transaction');
+    }}
+  >
+    <Plus size={15} /> Yeni Kayıt Ekle
+  </button>
+</div>
+
+<div className="sidebar-bottom"><UpdateWidget updateState={updateState} installedVersion={installedVersion} onCheck={checkForUpdate} onDownload={startDownload} onInstall={installAndRestart} />
+<a className="download-link" href={desktopDownloadUrl} target="_blank" rel="noreferrer"><Download size={17} />Web / Sürümler</a>
 <button type="button" className="profile profile-clickable" onClick={() => setRenameModalOpen(true)} title="Şirket adını düzenle"><div className="avatar">{getInitials(companyName)}</div><div><strong>{companyName}</strong><span>Şirket Profilini Düzenle ✏️</span></div></button>
 </div></aside>{mobileNav && <button className="backdrop" aria-label="Menüyü kapat" onClick={() => setMobileNav(false)} />}<main className="main-content"><header className="topbar"><button className="icon-button menu-button" aria-label="Menüyü aç" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="breadcrumb"><span>{companyName}</span><b>/</b><span>{activeLedger.name} Defteri</span><b>/</b><strong>{navItems.find((item) => item.id === section)?.label}</strong></div><div className="top-actions">
   <div className="cloud-status-group">

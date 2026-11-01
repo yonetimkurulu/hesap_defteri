@@ -148,13 +148,18 @@ export async function parseBankStatementPdf(file: File): Promise<StatementParseR
     }
 
     // Tablo başlık satırını bul (İşlem Tarihi, Tarih, Valör, Açıklama, Tutar vs.)
-    const headerItem = pageItems.find(
-      (it) =>
-        it.text.toLowerCase().includes('işlem tarihi') ||
-        it.text.toLowerCase().includes('islem tarihi') ||
+    const headerItem = pageItems.find((it) => {
+      const t = it.text.toLocaleLowerCase('tr-TR');
+      return (
+        t.includes('işlem tarihi') ||
+        t.includes('islem tarihi') ||
+        t.includes('tarih') ||
+        t.includes('valör') ||
+        t.includes('valor') ||
         it.text === 'Tarih' ||
         it.text === 'İşlem Tarihi'
-    );
+      );
+    });
 
     const headerY = headerItem ? headerItem.y : 9999;
 
@@ -276,10 +281,13 @@ export async function parseBankStatementPdf(file: File): Promise<StatementParseR
 export function exportStatementToExcel(result: StatementParseResult, fileName = 'Banka-Ekstresi.xlsx') {
   const excelData = result.rows.map((row) => ({
     'İşlem Tarihi': row.rawDate,
+    'Tür': row.type === 'income' ? 'Giriş' : 'Çıkış',
     'Açıklama': row.description,
-    'Tutar': row.rawAmount,
-    'Bakiye': row.rawBalance,
-    ...(row.referenceNo ? { 'Referans Numarası': row.referenceNo } : {}),
+    'Tutar (TL)': row.type === 'expense' ? -row.amount : row.amount,
+    'Giriş (TL)': row.type === 'income' ? row.amount : null,
+    'Çıkış (TL)': row.type === 'expense' ? row.amount : null,
+    'Bakiye (TL)': row.balance ?? (row.rawBalance ? Math.abs(parseTrAmount(row.rawBalance)) : null),
+    'Referans No': row.referenceNo || '',
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(excelData);
@@ -287,10 +295,13 @@ export function exportStatementToExcel(result: StatementParseResult, fileName = 
   // Kolon genişliklerini otomatik ayarla
   worksheet['!cols'] = [
     { wch: 14 }, // İşlem Tarihi
-    { wch: 65 }, // Açıklama
-    { wch: 20 }, // Tutar
-    { wch: 20 }, // Bakiye
-    { wch: 18 }, // Referans Numarası
+    { wch: 10 }, // Tür
+    { wch: 60 }, // Açıklama
+    { wch: 16 }, // Tutar (TL)
+    { wch: 16 }, // Giriş (TL)
+    { wch: 16 }, // Çıkış (TL)
+    { wch: 16 }, // Bakiye (TL)
+    { wch: 18 }, // Referans No
   ];
 
   const workbook = XLSX.utils.book_new();
