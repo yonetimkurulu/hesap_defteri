@@ -1,7 +1,7 @@
 {
   "name": "hesap_defteri",
   "private": true,
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Küçük işletmeler için local-first hesap ve defter yönetimi.",
   "author": "Hesap Defteri",
   "type": "module",
@@ -15,7 +15,9 @@
     "desktop:build": "npm run build && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
-    "electron-updater": "^6.8.11"
+    "electron-updater": "^6.8.11",
+    "pdfjs-dist": "^6.4.299",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.118.0",
