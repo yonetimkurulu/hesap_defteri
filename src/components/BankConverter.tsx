@@ -13,6 +13,7 @@ import {
   History,
   Eye,
   Clock,
+  MousePointerClick,
 } from 'lucide-react';
 import {
   parseBankStatementPdf,
@@ -250,10 +251,18 @@ export function BankConverter({ onImportToLedger, activeLedgerName }: BankConver
         ) : (
           <div className="dropzone-content">
             <div className="dropzone-icon-wrap">
-              <UploadCloud size={38} />
+              <UploadCloud size={40} />
+              <div className="dropzone-pointer-pill" title="Seçmek için tıklayın">
+                <MousePointerClick size={16} />
+              </div>
             </div>
             <h3>Banka Ekstresi PDF Dosyasını Buraya Sürükleyin</h3>
-            <p>veya bilgisayarınızdan seçmek için <span>tıklayın</span></p>
+            <div className="dropzone-action-row">
+              <button type="button" className="dropzone-click-btn">
+                <MousePointerClick size={16} />
+                <span>PDF Dosyası Seçmek İçin Tıklayın</span>
+              </button>
+            </div>
             <span className="dropzone-hint">Vakıf Katılım, Ziraat, VakıfBank, Garanti, İş Bankası vb. tüm bankalar desteklenir</span>
           </div>
         )}

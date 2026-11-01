@@ -126,7 +126,7 @@ function App() {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.3.3')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.3.4')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   useEffect(() => {
@@ -298,14 +298,6 @@ function App() {
     const overdueTotal = overdueChecks.reduce((total, item) => total + item.amount, 0)
     return { income: sum('income'), expense: sum('expense'), payables: Math.max(sum('payable') - sum('payment'), 0), receivables: Math.max(sum('receivable') - sum('collection'), 0), topPayments, checkTotal, upcomingChecks, overdueChecks, overdueTotal }
   }, [periodTransactions, state.transactions])
-
-  const activeLedgerBalance = useMemo(() => {
-    return state.transactions.reduce((acc, t) => {
-      if (t.kind === 'income' || t.kind === 'collection') return acc + t.amount;
-      if (t.kind === 'expense' || t.kind === 'payment') return acc - t.amount;
-      return acc;
-    }, 0);
-  }, [state.transactions]);
   if (isSupabaseConfigured && !authReady) return <LoadingScreen />
   if (isSupabaseConfigured && !session && !skipAuth) {
     return (
@@ -452,23 +444,17 @@ function App() {
 
 <div className="sidebar-summary-card">
   <div className="summary-title">
-    <WalletCards size={13} />
-    <span>KASA & BAKİYE DURUMU</span>
-  </div>
-  <div className="summary-balance">
-    <small>{activeLedger.name} Net Kasa</small>
-    <strong className={activeLedgerBalance >= 0 ? "pos" : "neg"}>
-      {currency.format(activeLedgerBalance)}
-    </strong>
+    <CalendarDays size={14} />
+    <span>AYLIK GELİR & GİDER</span>
   </div>
   <div className="summary-stats-grid">
     <div className="summary-stat-col">
       <small>Bu Ay Gelir</small>
-      <span className="pos">+{currency.format(metrics.income)}</span>
+      <strong className="pos">+{currency.format(metrics.income)}</strong>
     </div>
     <div className="summary-stat-col">
       <small>Bu Ay Gider</small>
-      <span className="neg">-{currency.format(metrics.expense)}</span>
+      <strong className="neg">-{currency.format(metrics.expense)}</strong>
     </div>
   </div>
   <button
@@ -964,14 +950,52 @@ function Dashboard({
   const selectedMonthDate = new Date(`${selectedMonth}-01T12:00:00`);
   const selectedMonthName = monthFormatter.format(selectedMonthDate);
 
-  const periodLabel =
-    period === 'today'
-      ? 'Bugün'
-      : period === 'month'
-      ? (isCurrentMonth ? `Bu ay (${selectedMonthName})` : selectedMonthName)
-      : period === 'all'
-      ? 'Tüm zamanlar'
-      : 'Özel dönem';
+  // Bir önceki ayı dinamik hesapla
+  const prevMonthDate = new Date(selectedMonthDate);
+  prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+  const prevMonthName = monthFormatter.format(prevMonthDate);
+
+  // Dönem bazlı başlık ve etiket metinleri (Türkçe gramer ve imla düzeltmeleri)
+  const isMonth = period === 'month';
+  const isToday = period === 'today';
+  const isAll = period === 'all';
+
+  let incomeLabel = 'Gelir';
+  let expenseLabel = 'Gider';
+  let periodCaptionText = 'Dönem Hesapları';
+  let recentHeadingSubtitle = 'Son hareketler';
+  let emptyTitleText = 'Henüz İşlem Yok';
+  let topPaymentsSubtitle = 'Kişi bazında ödemeler';
+
+  if (isToday) {
+    incomeLabel = 'Bugünkü Gelir';
+    expenseLabel = 'Bugünkü Gider';
+    periodCaptionText = 'Bugünün Hesapları';
+    recentHeadingSubtitle = 'Bugünkü hareketler';
+    emptyTitleText = 'Bugün henüz işlem kaydedilmedi';
+    topPaymentsSubtitle = 'Bugünkü kişi bazında';
+  } else if (isMonth) {
+    incomeLabel = isCurrentMonth ? 'Bu Ayın Geliri' : `${selectedMonthName} Geliri`;
+    expenseLabel = isCurrentMonth ? 'Bu Ayın Gideri' : `${selectedMonthName} Gideri`;
+    periodCaptionText = isCurrentMonth ? 'Bu Ayın Hesapları' : `${selectedMonthName} Hesapları`;
+    recentHeadingSubtitle = isCurrentMonth ? 'Bu ayın hareketleri' : `${selectedMonthName} hareketleri`;
+    emptyTitleText = isCurrentMonth ? 'Bu ay henüz işlem yok' : `${selectedMonthName} döneminde henüz işlem yok`;
+    topPaymentsSubtitle = isCurrentMonth ? 'Bu ay kişi bazında' : `${selectedMonthName} kişi bazında`;
+  } else if (isAll) {
+    incomeLabel = 'Toplam Gelir';
+    expenseLabel = 'Toplam Gider';
+    periodCaptionText = 'Tüm Zamanların Hesapları';
+    recentHeadingSubtitle = 'Tüm zamanların hareketleri';
+    emptyTitleText = 'Defterde henüz işlem bulunmuyor';
+    topPaymentsSubtitle = 'Tüm zamanlar kişi bazında';
+  } else {
+    incomeLabel = 'Dönem Geliri';
+    expenseLabel = 'Dönem Gideri';
+    periodCaptionText = 'Özel Dönem Hesapları';
+    recentHeadingSubtitle = 'Seçili aralık hareketleri';
+    emptyTitleText = 'Seçilen aralıkta işlem bulunamadı';
+    topPaymentsSubtitle = 'Dönem içi kişi bazında';
+  }
 
   return (
     <>
@@ -1035,7 +1059,7 @@ function Dashboard({
             <input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} />
           </div>
         )}
-        <span className="period-caption">{periodLabel} hesapları</span>
+        <span className="period-caption">{periodCaptionText}</span>
       </div>
 
       <div className="notice">
@@ -1044,18 +1068,18 @@ function Dashboard({
       </div>
 
       <section className="metric-grid">
-        <Metric label={`${periodLabel} geliri`} value={metrics.income} icon={<ArrowDownLeft size={18} />} tone="positive" />
-        <Metric label={`${periodLabel} gideri`} value={metrics.expense} icon={<ArrowUpRight size={18} />} tone="negative" />
-        <Metric label="Açık borç" value={metrics.payables} icon={<WalletCards size={18} />} tone="orange" />
-        <Metric label="Açık alacak" value={metrics.receivables} icon={<Banknote size={18} />} tone="blue" />
+        <Metric label={incomeLabel} value={metrics.income} icon={<ArrowDownLeft size={18} />} tone="positive" />
+        <Metric label={expenseLabel} value={metrics.expense} icon={<ArrowUpRight size={18} />} tone="negative" />
+        <Metric label="Açık Borç" value={metrics.payables} icon={<WalletCards size={18} />} tone="orange" />
+        <Metric label="Açık Alacak" value={metrics.receivables} icon={<Banknote size={18} />} tone="blue" />
       </section>
 
       <div className="dashboard-grid">
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <h2>Son işlemler</h2>
-              <p className="muted">{periodLabel} hareketleri</p>
+              <h2>Son İşlemler</h2>
+              <p className="muted">{recentHeadingSubtitle}</p>
             </div>
             <button className="text-button" onClick={() => onNavigate('transactions')}>
               Tümünü gör <ArrowUpRight size={15} />
@@ -1066,14 +1090,16 @@ function Dashboard({
           ) : (
             <Empty
               icon={<WalletCards size={21} />}
-              title={`${periodLabel} döneminde henüz işlem yok`}
+              title={emptyTitleText}
               text={
-                period === 'month' && isCurrentMonth
-                  ? "Kasım ayında henüz kayıt girmediniz. Geçen ayki (Ekim) kayıtlarınızı görmek için yukarıdaki oktan (<) önceki aya geçebilir veya 'Tümü' butonuna tıklayabilirsiniz."
+                isToday
+                  ? "Bugün henüz bir gelir veya gider kaydı girmediniz. Yukarıdaki 'Yeni Kayıt' butonuna tıklayarak ilk işleminizi ekleyebilirsiniz."
+                  : isMonth && isCurrentMonth
+                  ? `${selectedMonthName} ayında henüz kayıt girmediniz. Geçen ayki (${prevMonthName}) kayıtlarınızı görmek için yukarıdaki oktan (<) önceki aya geçebilir veya 'Tümü' butonuna tıklayabilirsiniz.`
                   : "Bu döneme ait henüz bir gelir veya gider kaydı bulunamadı."
               }
-              action={period === 'month' && isCurrentMonth ? "Önceki aya (Ekim 2026) git" : "Yeni kayıt ekle"}
-              onClick={period === 'month' && isCurrentMonth ? () => onChangeMonth(-1) : onAdd}
+              action={isMonth && isCurrentMonth ? `Önceki aya (${prevMonthName}) git` : "Yeni kayıt ekle"}
+              onClick={isMonth && isCurrentMonth ? () => onChangeMonth(-1) : onAdd}
             />
           )}
         </section>
@@ -1081,8 +1107,8 @@ function Dashboard({
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <h2>En çok ödeme yapılanlar</h2>
-              <p className="muted">{periodLabel} kişi bazında</p>
+              <h2>En Çok Ödeme Yapılanlar</h2>
+              <p className="muted">{topPaymentsSubtitle}</p>
             </div>
             <Users size={20} className="muted-icon" />
           </div>
