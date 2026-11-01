@@ -26,16 +26,16 @@ export interface StatementParseResult {
 }
 
 /**
- * Türk Lirası tutar string'ini sayıya çevirir.
- * Örn: "125.450,50" -> 125450.50
- * Örn: "1,250.00" -> 1250.00
+ * Türk Lirası tutar string'ini sayıya çevirir (eksi işareti dahil).
  */
 export function parseTrAmount(str: string): number {
   if (!str) return 0;
   let clean = str.trim().replace(/[^\d.,\-+]/g, '');
   if (!clean) return 0;
 
-  // Türk formatı: 1.250,50
+  const isNeg = clean.includes('-');
+  clean = clean.replace(/[-+]/g, '');
+
   if (clean.includes(',') && clean.includes('.')) {
     if (clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
       clean = clean.replace(/\./g, '').replace(',', '.');
@@ -47,7 +47,8 @@ export function parseTrAmount(str: string): number {
   }
 
   const num = parseFloat(clean);
-  return isNaN(num) ? 0 : num;
+  if (isNaN(num)) return 0;
+  return isNeg ? -num : num;
 }
 
 /**
@@ -66,179 +67,194 @@ interface TextItemWithPos {
   page: number;
 }
 
+const TCMB_BANK_CODES: Record<string, string> = {
+  '0010': 'Ziraat Bankası',
+  '0012': 'Halkbank',
+  '0015': 'VakıfBank',
+  '0021': 'Vakıf Katılım Bankası',
+  '0032': 'Türk Ekonomi Bankası (TEB)',
+  '0046': 'Akbank',
+  '0062': 'Garanti BBVA',
+  '0064': 'Türkiye İş Bankası',
+  '0067': 'Yapı ve Kredi Bankası',
+  '0111': 'QNB Finansbank',
+  '0123': 'HSBC',
+  '0134': 'DenizBank',
+  '0203': 'Albaraka Türk',
+  '0205': 'Kuveyt Türk',
+  '0206': 'Türkiye Finans',
+  '0210': 'Ziraat Katılım',
+  '0211': 'Emlak Katılım',
+};
+
 /**
- * PDF dosyasını okuyup koordinatlarına göre satır ve sütunlara ayırır.
+ * Bankayı hem metinden hem de IBAN banka kodundan tespit eder.
+ */
+function detectBankName(allText: string): string {
+  const lower = allText.toLowerCase();
+
+  // 1. IBAN Kodundan Tespit (En güvenilir yöntem)
+  const ibanMatch = allText.match(/TR\s*\d{2}\s*(\d{4})/i);
+  if (ibanMatch && TCMB_BANK_CODES[ibanMatch[1]]) {
+    return TCMB_BANK_CODES[ibanMatch[1]];
+  }
+
+  // 2. Metin bazlı tespit
+  if (lower.includes('vakıf katılım') || lower.includes('vakif katilim')) return 'Vakıf Katılım Bankası';
+  if (lower.includes('ziraat')) return 'Ziraat Bankası';
+  if (lower.includes('vakıfbank') || lower.includes('vakifbank')) return 'VakıfBank';
+  if (lower.includes('garanti')) return 'Garanti BBVA';
+  if (lower.includes('iş bank') || lower.includes('isbank')) return 'Türkiye İş Bankası';
+  if (lower.includes('halkbank')) return 'Halkbank';
+  if (lower.includes('yapı kredi') || lower.includes('yapi kredi')) return 'Yapı Kredi';
+  if (lower.includes('akbank')) return 'Akbank';
+  if (lower.includes('kuveyt')) return 'Kuveyt Türk';
+  if (lower.includes('albaraka')) return 'Albaraka Türk';
+  if (lower.includes('emlak katılım')) return 'Emlak Katılım';
+  if (lower.includes('qnb') || lower.includes('finansbank')) return 'QNB Finansbank';
+  if (lower.includes('denizbank')) return 'DenizBank';
+
+  return 'Banka Ekstresi';
+}
+
+/**
+ * PDF dosyasını okuyup koordinatlarına ve sütun yapısına göre satır satır ayrıştırır.
  */
 export async function parseBankStatementPdf(file: File): Promise<StatementParseResult> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-  const allItems: TextItemWithPos[] = [];
-  let detectedBank = 'Banka Ekstresi';
+  let allFullText = '';
+  const rows: ParsedBankRow[] = [];
+
+  const dateRegex = /^\d{2}[./-]\d{2}[./-]\d{4}$/;
+  const amountRegex = /-?\s*\d{1,3}(?:[.,]\d{3})*[.,]\d{2}/g;
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
 
+    const pageItems: TextItemWithPos[] = [];
+
     for (const item of textContent.items) {
       if ('str' in item && item.str.trim()) {
         const text = item.str.trim();
-        // transform[4] = X, transform[5] = Y
         const x = Math.round(item.transform[4]);
         const y = Math.round(item.transform[5]);
-
-        allItems.push({ text, x, y, page: pageNum });
-
-        const lower = text.toLowerCase();
-        if (lower.includes('ziraat')) detectedBank = 'Ziraat Bankası';
-        else if (lower.includes('vakıf') || lower.includes('vakifbank')) detectedBank = 'VakıfBank';
-        else if (lower.includes('garanti')) detectedBank = 'Garanti BBVA';
-        else if (lower.includes('iş bank') || lower.includes('isbank')) detectedBank = 'İş Bankası';
-        else if (lower.includes('halkbank')) detectedBank = 'Halkbank';
-        else if (lower.includes('akbank')) detectedBank = 'Akbank';
-        else if (lower.includes('yapı kredi') || lower.includes('yapi kredi')) detectedBank = 'Yapı Kredi';
-        else if (lower.includes('qnb') || lower.includes('finansbank')) detectedBank = 'QNB Finansbank';
+        pageItems.push({ text, x, y, page: pageNum });
+        allFullText += ' ' + text;
       }
     }
-  }
 
-  // Sayfa ve Y koordinatına göre satır gruplama (Y toleransı 4px)
-  const rowsByPageAndY: Record<string, TextItemWithPos[]> = {};
+    // Tablo başlık satırını bul (İşlem Tarihi, Tarih, Valör, Açıklama, Tutar vs.)
+    const headerItem = pageItems.find(
+      (it) =>
+        it.text.toLowerCase().includes('işlem tarihi') ||
+        it.text.toLowerCase().includes('islem tarihi') ||
+        it.text === 'Tarih' ||
+        it.text === 'İşlem Tarihi'
+    );
 
-  for (const item of allItems) {
-    // PDF koordinatında Y yukarıdan aşağıya azaldığı için sayfa + yaklaşık Y grubu yapıyoruz
-    const roundedY = Math.round(item.y / 5) * 5;
-    const key = `p${item.page}_y${roundedY}`;
+    const headerY = headerItem ? headerItem.y : 9999;
 
-    if (!rowsByPageAndY[key]) {
-      rowsByPageAndY[key] = [];
-    }
-    rowsByPageAndY[key].push(item);
-  }
+    // Sadece başlığın ALTINDA kalan tablo öğelerini al
+    const tableItems = pageItems.filter((it) => it.y < headerY - 4);
 
-  // Satırları X eksenine göre soldan sağa sırala
-  const sortedRowKeys = Object.keys(rowsByPageAndY).sort((a, b) => {
-    const [pA, yA] = a.replace('p', '').split('_y').map(Number);
-    const [pB, yB] = b.replace('p', '').split('_y').map(Number);
-    if (pA !== pB) return pA - pB;
-    return yB - yA; // Y koordinatı yukarıdan aşağıya azalır
-  });
+    // İşlem Tarihi sütunundaki tarih hücrelerini bul (Genelde X < 145)
+    const dateCells = tableItems
+      .filter((it) => it.x < 145 && dateRegex.test(it.text))
+      .sort((a, b) => b.y - a.y); // Yukarıdan aşağıya
 
-  const parsedLines: string[][] = [];
-  for (const key of sortedRowKeys) {
-    const items = rowsByPageAndY[key].sort((a, b) => a.x - b.x);
-    parsedLines.push(items.map((it) => it.text));
-  }
+    for (let i = 0; i < dateCells.length; i++) {
+      const curDateCell = dateCells[i];
+      const nextDateCell = dateCells[i + 1];
 
-  // Satırlardan işlem hareketlerini ayıklama
-  const transactions: ParsedBankRow[] = [];
-  const dateRegex = /\b(\d{2}[./-]\d{2}[./-]\d{4})\b/;
-  const amountRegex = /([+-]?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))/;
+      // Bu hareketin dikey koordinat aralığı
+      const topY = curDateCell.y + 4;
+      const bottomY = nextDateCell ? nextDateCell.y + 4 : -999;
 
-  let currentRow: Partial<ParsedBankRow> | null = null;
+      const rowItems = tableItems.filter((it) => it.y <= topY && it.y > bottomY);
 
-  for (const line of parsedLines) {
-    const lineStr = line.join(' ');
+      // Açıklama: Tarih sütunundan sonra, tutar sütunundan önce gelen çok satırlı metinler
+      const descItems = rowItems
+        .filter((it) => it.x >= 135 && it.x < 290)
+        .sort((a, b) => (b.y !== a.y ? b.y - a.y : a.x - b.x));
+      const description = descItems.map((it) => it.text).join(' ').replace(/\s+/g, ' ').trim();
 
-    // Başlık satırlarını atla
-    if (
-      lineStr.toLowerCase().includes('bakiye') &&
-      lineStr.toLowerCase().includes('tarih') &&
-      lineStr.toLowerCase().includes('tutar')
-    ) {
-      continue;
-    }
+      // Tutar & Bakiye sütunu: X >= 290
+      const amountItems = rowItems.filter((it) => it.x >= 290 && it.x < 450);
+      const combinedAmountStr = amountItems.map((it) => it.text).join(' ');
 
-    const dateMatch = lineStr.match(dateRegex);
+      // Sayıları ayıkla
+      const matches = combinedAmountStr.match(amountRegex) || [];
 
-    if (dateMatch) {
-      // Önceki satırı kaydet
-      if (currentRow && currentRow.rawDate && currentRow.amount) {
-        transactions.push(finalizeRow(currentRow));
-      }
-
-      // Yeni satır başlat
-      const rawDate = dateMatch[1];
-      const isoDate = normalizeDate(rawDate);
-
-      // Tutarları bul
-      const matches = Array.from(lineStr.matchAll(new RegExp(amountRegex.source, 'g'))).map((m) => m[1]);
-      
       let amount = 0;
+      let isExpense = false;
+      let balance: number | undefined = undefined;
       let rawAmount = '';
-      let type: 'income' | 'expense' = 'expense';
 
-      // Satırdaki tutarları tara
-      for (const m of matches) {
-        if (m === rawDate) continue; // Tarihle karışmasın
-        const val = parseTrAmount(m);
-        if (val > 0) {
-          amount = val;
-          rawAmount = m;
-          // Eğer + varsa veya Alacak sütunundaysa gelir
-          if (m.includes('+') || lineStr.toLowerCase().includes('alacak') || lineStr.toLowerCase().includes('gelir')) {
-            type = 'income';
-          } else {
-            type = 'expense';
-          }
-          break;
+      if (matches.length > 0) {
+        const firstAmtStr = matches[0] ?? '';
+        rawAmount = firstAmtStr;
+        const parsed = parseTrAmount(firstAmtStr);
+        amount = Math.abs(parsed);
+
+        // Borç / Alacak Tespiti:
+        // 1. Sayı eksi ile başlıyorsa -> ÇIKIŞ (Gider)
+        if (parsed < 0 || firstAmtStr.includes('-')) {
+          isExpense = true;
+        }
+        // 2. Sayı pozitifse:
+        // Vakıf Katılım, Ziraat gibi ekstrelerde pozitif tutarlar GİRİŞ (Alacak) anlamına gelir
+        else {
+          isExpense = false;
+        }
+
+        // Açıklama bazlı teyit (örn. 'Amir=' gelen para, 'Lehdar=' giden para)
+        const descLower = description.toLowerCase();
+        if (descLower.includes('lehdar=') || descLower.includes('lhd:') || descLower.includes('fat.tahs') || descLower.includes('pos')) {
+          // Eğer tutarda açıkça + yoksa ve açıklama fatura/lehdar ise çıkıştır
+          if (firstAmtStr.includes('-')) isExpense = true;
+        }
+
+        // İkinci sayı varsa bu Bakiye'dir
+        const secondAmtStr = matches[1];
+        if (secondAmtStr) {
+          balance = Math.abs(parseTrAmount(secondAmtStr));
         }
       }
 
-      // Açıklamayı temizle
-      let desc = lineStr.replace(rawDate, '').replace(rawAmount, '').trim();
-      desc = desc.replace(/\s+/g, ' ');
-
-      currentRow = {
-        id: crypto.randomUUID(),
-        rawDate,
-        date: isoDate,
-        description: desc,
-        amount,
-        rawAmount,
-        type,
-      };
-    } else if (currentRow) {
-      // Tarih yoksa, bu satır bir önceki işlemin açıklamasının devamıdır (Ziraat çok satırlı açıklamaları!)
-      const extraDesc = lineStr.trim();
-      if (extraDesc && !extraDesc.toLowerCase().includes('sayfa') && !extraDesc.toLowerCase().includes('toplam')) {
-        currentRow.description = (currentRow.description ? `${currentRow.description} ` : '') + extraDesc;
+      if (amount > 0) {
+        rows.push({
+          id: crypto.randomUUID(),
+          date: normalizeDate(curDateCell.text),
+          rawDate: curDateCell.text,
+          description: description || 'Banka Hareketi',
+          amount,
+          type: isExpense ? 'expense' : 'income',
+          balance,
+          rawAmount,
+        });
       }
     }
-  }
-
-  // Son satırı da ekle
-  if (currentRow && currentRow.rawDate && currentRow.amount) {
-    transactions.push(finalizeRow(currentRow));
   }
 
   // Toplamları hesapla
   let totalIncome = 0;
   let totalExpense = 0;
 
-  for (const row of transactions) {
+  for (const row of rows) {
     if (row.type === 'income') totalIncome += row.amount;
     else totalExpense += row.amount;
   }
+
+  const detectedBank = detectBankName(allFullText);
 
   return {
     bankName: detectedBank,
     totalIncome,
     totalExpense,
-    rows: transactions,
-  };
-}
-
-function finalizeRow(row: Partial<ParsedBankRow>): ParsedBankRow {
-  return {
-    id: row.id || crypto.randomUUID(),
-    date: row.date || '',
-    rawDate: row.rawDate || '',
-    description: (row.description || 'Banka Hareketi').replace(/\s+/g, ' ').trim(),
-    amount: row.amount || 0,
-    type: row.type || 'expense',
-    rawAmount: row.rawAmount || '',
-    balance: row.balance,
+    rows,
   };
 }
 
@@ -251,6 +267,7 @@ export function exportStatementToExcel(result: StatementParseResult, fileName = 
     'İşlem Türü': row.type === 'income' ? 'Giriş (Alacak)' : 'Çıkış (Borç)',
     'Açıklama': row.description,
     'Tutar (TL)': row.amount,
+    ...(row.balance !== undefined ? { 'Bakiye (TL)': row.balance } : {}),
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(excelData);
@@ -259,8 +276,9 @@ export function exportStatementToExcel(result: StatementParseResult, fileName = 
   worksheet['!cols'] = [
     { wch: 14 }, // Tarih
     { wch: 16 }, // Tür
-    { wch: 55 }, // Açıklama
+    { wch: 60 }, // Açıklama
     { wch: 18 }, // Tutar
+    { wch: 18 }, // Bakiye
   ];
 
   const workbook = XLSX.utils.book_new();

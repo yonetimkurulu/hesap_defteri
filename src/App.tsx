@@ -126,7 +126,7 @@ function App() {
     return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem(LEDGERS_KEY)
   })
   const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
-  const [installedVersion, setInstalledVersion] = useState<string>('0.3.0')
+  const [installedVersion, setInstalledVersion] = useState<string>('0.3.1')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   useEffect(() => {

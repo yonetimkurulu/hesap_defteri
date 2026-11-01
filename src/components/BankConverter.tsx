@@ -259,10 +259,11 @@ export function BankConverter({ onImportToLedger, activeLedgerName }: BankConver
                 <thead>
                   <tr>
                     <th style={{ width: '110px' }}>Tarih</th>
-                    <th style={{ width: '100px' }}>Tür</th>
+                    <th style={{ width: '90px' }}>Tür</th>
                     <th>Açıklama</th>
-                    <th style={{ width: '150px', textAlign: 'right' }}>Tutar</th>
-                    <th style={{ width: '50px' }}></th>
+                    <th style={{ width: '140px', textAlign: 'right' }}>Tutar</th>
+                    <th style={{ width: '140px', textAlign: 'right' }}>Bakiye</th>
+                    <th style={{ width: '45px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -279,6 +280,9 @@ export function BankConverter({ onImportToLedger, activeLedgerName }: BankConver
                       </td>
                       <td className={`amount-cell ${row.type === 'income' ? 'positive' : 'negative'}`}>
                         {row.type === 'income' ? '+' : '-'}{currency.format(row.amount)}
+                      </td>
+                      <td style={{ textAlign: 'right', color: '#64748b', fontSize: '12px' }}>
+                        {row.balance !== undefined ? currency.format(row.balance) : '-'}
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <button
